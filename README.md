@@ -1,6 +1,6 @@
 # 🔄 repo2skill
 
-> **Convert any GitHub repo into an OpenClaw skill. One command.**
+> **Convert any GitHub repo into an OpenClaw skill. 16 languages. 100+ examples.**
 
 [![npm version](https://img.shields.io/npm/v/repo2skill)](https://www.npmjs.com/package/repo2skill)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
