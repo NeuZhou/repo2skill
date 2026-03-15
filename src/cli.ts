@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { repo2skill, repo2skillJson } from "./index";
+import { repo2skill, repo2skillJson, repo2skillDryRun } from "./index";
 import * as path from "path";
 import * as fs from "fs";
 
@@ -15,11 +15,30 @@ program
   .option("-n, --name <name>", "Override skill name")
   .option("-b, --batch <file>", "Batch mode: file with one repo URL per line")
   .option("-j, --json", "Output analysis as JSON instead of generating files")
-  .action(async (repo: string | undefined, opts: { output: string; name?: string; batch?: string; json?: boolean }) => {
+  .option("-d, --dry-run", "Preview what would be generated without writing files")
+  .action(async (repo: string | undefined, opts: { output: string; name?: string; batch?: string; json?: boolean; dryRun?: boolean }) => {
     try {
       if (opts.json && repo) {
         const result = await repo2skillJson(repo);
         console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+      if (opts.dryRun && repo) {
+        const result = await repo2skillDryRun(repo, opts.name);
+        console.log(`\n🔍 Dry Run — ${repo}\n`);
+        console.log(`  Skill name:    ${result.skillName}`);
+        console.log(`  Description:   ${result.description.slice(0, 120)}${result.description.length > 120 ? "..." : ""}`);
+        console.log(`  Language:      ${result.language}`);
+        console.log(`  Languages:     ${result.languages.join(", ")}`);
+        console.log(`  Category:      ${result.category}`);
+        console.log(`  CLI commands:  ${result.cliCommands.length > 0 ? result.cliCommands.join(", ") : "(none)"}`);
+        console.log(`  Has tests:     ${result.hasTests ? "Yes" : "No"}`);
+        console.log(`  License:       ${result.license || "Unknown"}`);
+        console.log(`  Monorepo:      ${result.isMonorepo ? `Yes (${result.monorepoPackages.length} packages)` : "No"}`);
+        console.log(`  Features:      ${result.features.length > 0 ? result.features.slice(0, 3).join("; ") : "(none detected)"}`);
+        console.log(`  Code examples: ${result.usageExamples}`);
+        console.log(`  When to use:   ${result.whenToUse.join("; ")}`);
+        console.log("");
         return;
       }
       if (opts.batch) {

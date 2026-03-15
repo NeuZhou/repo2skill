@@ -3,7 +3,7 @@ import * as fs from "fs";
 import * as os from "os";
 import simpleGit from "simple-git";
 import { glob } from "glob";
-import { analyzeRepo, RepoAnalysis } from "./analyzer";
+import { analyzeRepo, RepoAnalysis, categorizeProject } from "./analyzer";
 import { generateSkill } from "./generator";
 
 export interface Repo2SkillOptions {
@@ -70,6 +70,54 @@ export async function repo2skillJson(repo: string): Promise<RepoAnalysis> {
   try {
     const analysis = await analyzeRepo(tmpDir, repoName);
     return analysis;
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
+export interface DryRunResult {
+  skillName: string;
+  description: string;
+  language: string;
+  languages: string[];
+  category: string;
+  cliCommands: string[];
+  hasTests: boolean;
+  license: string;
+  isMonorepo: boolean;
+  monorepoPackages: string[];
+  features: string[];
+  usageExamples: number;
+  whenToUse: string[];
+}
+
+export async function repo2skillDryRun(repo: string, nameOverride?: string): Promise<DryRunResult> {
+  const { url, name: repoName } = parseRepoArg(repo);
+  const skillName = nameOverride || repoName;
+
+  const tmpDir = path.join(os.tmpdir(), `repo2skill-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  console.log(`📦 Cloning ${url}...`);
+  const git = simpleGit();
+  await git.clone(url, tmpDir, ["--depth", "1"]);
+
+  try {
+    console.log(`🔍 Analyzing repository...`);
+    const analysis = await analyzeRepo(tmpDir, repoName);
+    return {
+      skillName,
+      description: analysis.richDescription || analysis.description,
+      language: analysis.language,
+      languages: analysis.languages,
+      category: categorizeProject(analysis),
+      cliCommands: analysis.cliCommands.map(c => c.name),
+      hasTests: analysis.hasTests,
+      license: analysis.license,
+      isMonorepo: analysis.isMonorepo,
+      monorepoPackages: analysis.monorepoPackages,
+      features: analysis.features,
+      usageExamples: analysis.usageExamples.length,
+      whenToUse: analysis.whenToUse,
+    };
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
