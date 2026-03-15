@@ -38,7 +38,7 @@ export async function repo2skill(
   const skillName = options.skillName || repoName;
 
   // Clone to temp dir
-  const tmpDir = path.join(os.tmpdir(), `repo2skill-${Date.now()}`);
+  const tmpDir = path.join(os.tmpdir(), `repo2skill-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   console.log(`📦 Cloning ${url}...`);
   const git = simpleGit();
   await git.clone(url, tmpDir, ["--depth", "1"]);

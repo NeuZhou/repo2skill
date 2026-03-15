@@ -202,12 +202,31 @@ function findFile(dir: string, names: string[]): string | null {
   return null;
 }
 
+function stripHtmlTags(text: string): string {
+  return text
+    .replace(/<[^>]+>/g, "")   // Remove HTML tags
+    .replace(/&[a-z]+;/gi, "") // Remove HTML entities
+    .replace(/\s+/g, " ")      // Collapse whitespace
+    .trim();
+}
+
 function extractFirstParagraph(readme: string): string {
   const lines = readme.split("\n");
   let started = false;
+  let inHtmlBlock = false;
   const result: string[] = [];
   for (const line of lines) {
     const trimmed = line.trim();
+    // Track multi-line HTML blocks
+    if (!inHtmlBlock && /^<[a-zA-Z]/.test(trimmed)) {
+      inHtmlBlock = true;
+    }
+    if (inHtmlBlock) {
+      if (/<\/[a-zA-Z]+>/.test(trimmed) || /\/>/.test(trimmed)) {
+        inHtmlBlock = false;
+      }
+      continue;
+    }
     if (!started) {
       if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("[") || trimmed.startsWith("!") || trimmed.startsWith("<") || trimmed.startsWith("---")) continue;
       started = true;
@@ -217,7 +236,7 @@ function extractFirstParagraph(readme: string): string {
       result.push(trimmed);
     }
   }
-  return result.join(" ").slice(0, 300);
+  return stripHtmlTags(result.join(" ")).slice(0, 300);
 }
 
 /**
@@ -229,6 +248,7 @@ function extractRichDescription(readme: string): string {
   const paragraphs: string[] = [];
   let current: string[] = [];
   let inCodeBlock = false;
+  let inHtmlBlock = false;
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -236,8 +256,24 @@ function extractRichDescription(readme: string): string {
     if (trimmed.startsWith("```")) { inCodeBlock = !inCodeBlock; continue; }
     if (inCodeBlock) continue;
 
+    // Track multi-line HTML blocks (div, img, a, picture, table, etc.)
+    if (!inHtmlBlock && /^<[a-zA-Z]/.test(trimmed)) {
+      inHtmlBlock = true;
+    }
+    if (inHtmlBlock) {
+      // Check if the HTML block closes on this line
+      if (/<\/[a-zA-Z]+>/.test(trimmed) || /\/>/.test(trimmed)) {
+        inHtmlBlock = false;
+      }
+      if (current.length > 0) {
+        paragraphs.push(current.join(" "));
+        current = [];
+      }
+      continue;
+    }
+
     // Skip headings, badges, images, HTML
-    if (trimmed.startsWith("#") || trimmed.startsWith("[!") || trimmed.startsWith("![") || trimmed.startsWith("<") || trimmed.startsWith("---")) {
+    if (trimmed.startsWith("#") || trimmed.startsWith("[!") || trimmed.startsWith("![") || trimmed.startsWith("---")) {
       if (current.length > 0) {
         paragraphs.push(current.join(" "));
         current = [];
@@ -260,8 +296,8 @@ function extractRichDescription(readme: string): string {
   }
   if (current.length > 0) paragraphs.push(current.join(" "));
 
-  // Take first 2 meaningful paragraphs (min 20 chars each)
-  const meaningful = paragraphs.filter(p => p.length >= 20);
+  // Take first 2 meaningful paragraphs (min 20 chars each), strip HTML
+  const meaningful = paragraphs.map(p => stripHtmlTags(p)).filter(p => p.length >= 20);
   return meaningful.slice(0, 2).join("\n\n").slice(0, 600);
 }
 
@@ -334,9 +370,23 @@ function detectLanguages(files: string[]): string[] {
     .map(([lang]) => lang);
 }
 
+function categorizeProject(analysis: RepoAnalysis): string {
+  const desc = (analysis.richDescription + " " + analysis.description + " " + analysis.readmeFirstParagraph).toLowerCase();
+  if (desc.includes("server") || desc.includes("web framework") || desc.includes("web server") || desc.includes("http server") || desc.includes("api framework")) return "server-framework";
+  if (desc.includes("cli") || desc.includes("command-line") || desc.includes("command line")) return "cli-tool";
+  if (desc.includes("client") || desc.includes("http client") || desc.includes("fetch") || desc.includes("request library")) return "http-client";
+  if (desc.includes("framework")) return "framework";
+  if (desc.includes("library") || desc.includes("utility") || desc.includes("utilities")) return "library";
+  if (desc.includes("tool") || desc.includes("toolkit")) return "tool";
+  if (analysis.cliCommands.length > 0) return "cli-tool";
+  return "library";
+}
+
 function generateWhenToUse(analysis: RepoAnalysis): string[] {
   const items: string[] = [];
   const isCLI = analysis.cliCommands.length > 0;
+  const category = categorizeProject(analysis);
+  const desc = (analysis.richDescription + " " + analysis.description).toLowerCase();
 
   if (isCLI) {
     for (const cmd of analysis.cliCommands) {
@@ -344,16 +394,35 @@ function generateWhenToUse(analysis: RepoAnalysis): string[] {
     }
   }
 
-  // Infer from description keywords
-  const desc = (analysis.richDescription + " " + analysis.description).toLowerCase();
-  if (desc.includes("http") || desc.includes("request")) items.push("Make HTTP requests");
+  // Category-aware suggestions
+  switch (category) {
+    case "server-framework":
+      items.push(`Build web servers or APIs with ${analysis.name}`);
+      if (desc.includes("rest")) items.push("Create RESTful API endpoints");
+      if (desc.includes("plugin") || desc.includes("extensib")) items.push("Build extensible server applications");
+      break;
+    case "http-client":
+      items.push("Make HTTP requests");
+      if (desc.includes("api")) items.push("Interact with REST APIs");
+      break;
+    case "cli-tool":
+      if (desc.includes("build") || desc.includes("bundl")) items.push("Build or bundle projects");
+      break;
+    case "framework":
+      items.push(`Build ${analysis.language} applications with ${analysis.name}`);
+      break;
+  }
+
+  // General keyword-based, but filtered by category to avoid mismatches
+  if (category !== "server-framework") {
+    if (desc.includes("http") || desc.includes("request")) items.push("Make HTTP requests");
+  }
   if (desc.includes("test")) items.push("Run or write tests");
   if (desc.includes("lint") || desc.includes("format")) items.push("Lint or format code");
-  if (desc.includes("build") || desc.includes("bundl")) items.push("Build or bundle projects");
   if (desc.includes("parse") || desc.includes("pars")) items.push("Parse data or files");
   if (desc.includes("search") || desc.includes("find") || desc.includes("grep")) items.push("Search through files or text");
   if (desc.includes("color") || desc.includes("terminal") || desc.includes("ansi")) items.push("Style terminal output");
-  if (desc.includes("cli") || desc.includes("command")) items.push("Build command-line interfaces");
+  if (category !== "cli-tool" && (desc.includes("cli") || desc.includes("command"))) items.push("Build command-line interfaces");
 
   if (items.length === 0) {
     items.push(`Work with the ${analysis.name} ${analysis.language} project`);

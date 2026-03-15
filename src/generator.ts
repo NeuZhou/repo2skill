@@ -148,11 +148,16 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
   if (analysis.usageExamples.length > 0) {
     lines.push("### Basic Usage");
     lines.push("");
-    // Show up to 3 code examples
+    // Show up to 3 code examples, track them for dedup
+    const usedBlocks = new Set<string>();
     for (const example of analysis.usageExamples.slice(0, 3)) {
+      usedBlocks.add(example);
       lines.push(example);
       lines.push("");
     }
+
+    // Store for later dedup in Examples section
+    (analysis as any)._usedCodeBlocks = usedBlocks;
   } else if (analysis.usageSection) {
     lines.push("### Basic Usage");
     lines.push("");
@@ -170,12 +175,21 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
     lines.push("");
   }
 
-  // Examples section (if separate from usage)
+  // Examples section (if separate from usage, with dedup)
   if (analysis.examplesSection && analysis.examplesSection !== analysis.usageSection) {
-    lines.push("## Examples");
-    lines.push("");
-    lines.push(trimSection(analysis.examplesSection, 40));
-    lines.push("");
+    const usedBlocks: Set<string> = (analysis as any)._usedCodeBlocks || new Set();
+    // Remove code blocks that were already shown in Quick Start
+    let dedupedExamples = analysis.examplesSection;
+    for (const block of usedBlocks) {
+      dedupedExamples = dedupedExamples.replace(block, "");
+    }
+    dedupedExamples = dedupedExamples.replace(/\n{3,}/g, "\n\n").trim();
+    if (dedupedExamples.length > 20) {
+      lines.push("## Examples");
+      lines.push("");
+      lines.push(trimSection(dedupedExamples, 40));
+      lines.push("");
+    }
   }
 
   // API (brief, point to references)
@@ -212,7 +226,23 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
     lines.push("```");
   }
 
-  return lines.join("\n");
+  return ensureClosedCodeBlocks(lines.join("\n"));
+}
+
+/**
+ * Ensure all fenced code blocks are properly closed.
+ */
+function ensureClosedCodeBlocks(markdown: string): string {
+  let inBlock = false;
+  for (const line of markdown.split("\n")) {
+    if (/^```/.test(line.trim())) {
+      inBlock = !inBlock;
+    }
+  }
+  if (inBlock) {
+    return markdown + "\n```";
+  }
+  return markdown;
 }
 
 function extractCodeBlocks(text: string): string[] {
