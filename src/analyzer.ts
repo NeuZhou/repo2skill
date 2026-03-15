@@ -331,6 +331,47 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
     if (analysis.language === "unknown") analysis.language = "Go";
   }
 
+  // Package.swift (Swift)
+  const packageSwiftPath = path.join(repoDir, "Package.swift");
+  if (fs.existsSync(packageSwiftPath)) {
+    const content = fs.readFileSync(packageSwiftPath, "utf-8");
+    // Extract package name
+    const nameMatch = content.match(/name:\s*"([^"]+)"/);
+    const pkgName = nameMatch ? nameMatch[1] : repoName;
+    // Extract targets
+    const targetRegex = /\.(?:executableTarget|target|testTarget)\s*\(\s*name:\s*"([^"]+)"/g;
+    let tm;
+    const targets: string[] = [];
+    while ((tm = targetRegex.exec(content)) !== null) {
+      targets.push(tm[1]);
+    }
+    // Extract dependencies
+    const depRegex = /\.package\s*\(\s*url:\s*"([^"]+)"/g;
+    let dm;
+    while ((dm = depRegex.exec(content)) !== null) {
+      const depUrl = dm[1];
+      const depName = depUrl.replace(/\.git$/, "").split("/").pop() || depUrl;
+      analysis.dependencies.push(depName);
+    }
+    // Detect executable targets
+    const execTargetRegex = /\.executableTarget\s*\(\s*name:\s*"([^"]+)"/g;
+    let em;
+    while ((em = execTargetRegex.exec(content)) !== null) {
+      if (!analysis.cliCommands.some(c => c.name === em![1])) {
+        analysis.cliCommands.push({ name: em[1] });
+      }
+    }
+    if (!analysis.description) {
+      analysis.description = `${pkgName} — a Swift package${targets.length > 0 ? ` with targets: ${targets.join(", ")}` : ""}`;
+    }
+    if (!analysis.installInstructions) {
+      analysis.installInstructions = `// In Package.swift, add to dependencies:\n.package(url: "https://github.com/${repoName}", from: "1.0.0")\n\n// Then add to target dependencies:\n.product(name: "${pkgName}", package: "${pkgName}")`;
+    }
+    analysis.entryPoints.push(pkgName);
+    if (!analysis.languages.includes("Swift")) analysis.languages.unshift("Swift");
+    if (analysis.language === "unknown") analysis.language = "Swift";
+  }
+
   // Fallback description from README
   if (!analysis.description) {
     analysis.description = analysis.readmeFirstParagraph;

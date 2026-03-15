@@ -140,6 +140,11 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
       lines.push("```bash");
       lines.push(`go install ${analysis.entryPoints[0] || analysis.name}@latest`);
       lines.push("```");
+    } else if (analysis.language === "Swift") {
+      lines.push("```swift");
+      lines.push(`// In Package.swift dependencies:`);
+      lines.push(`.package(url: "https://github.com/${analysis.name}", from: "1.0.0")`);
+      lines.push("```");
     }
     lines.push("");
   }
