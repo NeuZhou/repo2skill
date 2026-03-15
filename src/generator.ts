@@ -175,6 +175,42 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
     lines.push("");
   }
 
+  // Features (top 5)
+  if (analysis.features.length > 0) {
+    lines.push("## Key Features");
+    lines.push("");
+    for (const feat of analysis.features.slice(0, 5)) {
+      lines.push(`- ${feat}`);
+    }
+    lines.push("");
+  }
+
+  // Configuration
+  if (analysis.configSection) {
+    const configBlocks = extractCodeBlocks(analysis.configSection);
+    if (configBlocks.length > 0) {
+      lines.push("## Configuration");
+      lines.push("");
+      lines.push(...configBlocks.slice(0, 2));
+      lines.push("");
+    }
+  }
+
+  // Monorepo info
+  if (analysis.isMonorepo && analysis.monorepoPackages.length > 0) {
+    lines.push("## Packages");
+    lines.push("");
+    lines.push("This is a monorepo containing the following packages:");
+    lines.push("");
+    for (const pkg of analysis.monorepoPackages.slice(0, 10)) {
+      lines.push(`- \`${pkg}\``);
+    }
+    if (analysis.monorepoPackages.length > 10) {
+      lines.push(`- ... and ${analysis.monorepoPackages.length - 10} more`);
+    }
+    lines.push("");
+  }
+
   // Examples section (if separate from usage, with dedup)
   if (analysis.examplesSection && analysis.examplesSection !== analysis.usageSection) {
     const usedBlocks: Set<string> = (analysis as any)._usedCodeBlocks || new Set();
