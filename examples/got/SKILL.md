@@ -1,17 +1,23 @@
 ---
 name: got
-description: Human-friendly and powerful HTTP request library for Node.js Language: TypeScript.
+description: > Human-friendly and powerful HTTP request library for Node.js WHEN: make http requests. Triggers: use got, install got, how to use got, make http request.
 ---
 
 # got
 
-Human-friendly and powerful HTTP request library for Node.js
+> Human-friendly and powerful HTTP request library for Node.js
 
 ## When to Use
 
-Use when working with the got TypeScript library.
+- Make HTTP requests
+
+## When NOT to Use
+
+- Projects using Python or Rust (different ecosystem)
 
 ## Quick Start
+
+### Install
 
 ```sh
 npm install got
@@ -22,6 +28,7 @@ npm install got
 - **Language:** TypeScript, JavaScript
 - **License:** MIT
 - **Tests:** Yes
+- **Key dependencies:** @sindresorhus/is, byte-counter, cacheable-lookup, cacheable-request, chunk-data, decompress-response, http2-wrapper, keyv
 
 ## File Structure
 

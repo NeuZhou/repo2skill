@@ -1,6 +1,6 @@
 ---
 name: jq
-description: `jq` is a lightweight and flexible command-line JSON processor akin to `sed`,`awk`,`grep`, and friends for JSON data. It's written in portable C and has zero runtime dependencies, allowing you to easily slice, filter, map, and transform structured data. Language: C.
+description: `jq` is a lightweight and flexible command-line JSON processor akin to `sed`,`awk`,`grep`, and friends for JSON data. It's written in portable C and has zero runtime dependencies, allowing you to easily slice, filter, map, and transform structured data. WHEN: make http requests, search through files or text. Triggers: use jq, install jq, how to use jq, make http request.
 ---
 
 # jq
@@ -9,9 +9,16 @@ description: `jq` is a lightweight and flexible command-line JSON processor akin
 
 ## When to Use
 
-Use when working with the jq C library.
+- Make HTTP requests
+- Search through files or text
+
+## When NOT to Use
+
+- Projects using TypeScript or Rust (different ecosystem)
 
 ## Quick Start
+
+### Install
 
 
 ## Project Info

@@ -1,17 +1,26 @@
 ---
 name: fd
-description: fd is a simple, fast and user-friendly alternative to find. CLI tool with commands: fd-find. Language: Rust.
+description: [[中文](https://github.com/cha0ran/fd-zh)] [[한국어](https://github.com/spearkkk/fd-kor)] WHEN: run `fd-find` commands, make http requests, search through files or text. Triggers: use fd, install fd, how to use fd, run fd-find.
 ---
 
 # fd
 
-fd is a simple, fast and user-friendly alternative to find.
+[[中文](https://github.com/cha0ran/fd-zh)] [[한국어](https://github.com/spearkkk/fd-kor)]
 
 ## When to Use
 
-Use when you need to run `fd-find` commands.
+- Run `fd-find` commands
+- Make HTTP requests
+- Search through files or text
+
+## When NOT to Use
+
+- GUI or web-based workflows where CLI is not available
+- Projects using Python or JavaScript (different ecosystem)
 
 ## Quick Start
+
+### Install
 
 cargo install --path .
 ```
@@ -49,4 +58,5 @@ cargo install --path .
 │   ├── fmt/
 │   ├── cli.rs
 │   ├── config.rs
+```
 ```

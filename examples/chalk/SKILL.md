@@ -1,6 +1,6 @@
 ---
 name: chalk
-description: Terminal string styling done right Language: JavaScript.
+description: Terminal string styling done right WHEN: style terminal output. Triggers: use chalk, install chalk, how to use chalk.
 ---
 
 # chalk
@@ -9,23 +9,27 @@ Terminal string styling done right
 
 ## When to Use
 
-Use when working with the chalk JavaScript library.
+- Style terminal output
+
+## When NOT to Use
+
+- Projects using Python or Rust (different ecosystem)
 
 ## Quick Start
+
+### Install
 
 ```sh
 npm install chalk
 ```
 
-## Usage
+### Basic Usage
 
 ```js
 import chalk from 'chalk';
 
 console.log(chalk.blue('Hello world!'));
 ```
-
-Chalk comes with an easy to use composable API where you just chain and nest the styles you want.
 
 ```js
 import chalk from 'chalk';
@@ -63,12 +67,15 @@ log(chalk.rgb(123, 45, 67).underline('Underlined reddish color'));
 log(chalk.hex('#DEADED').bold('Bold gray!'));
 ```
 
-Easily define your own themes:
-
 ```js
 import chalk from 'chalk';
 
 const error = chalk.bold.red;
+const warning = chalk.hex('#FFA500'); // Orange color
+
+console.log(error('Error!'));
+console.log(warning('Warning!'));
+```
 
 ## Project Info
 

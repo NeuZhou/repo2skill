@@ -1,6 +1,6 @@
 ---
 name: bun
-description: Bun is an all-in-one toolkit for JavaScript and TypeScript apps. It ships as a single executable called `bun`. Language: JavaScript.
+description: Bun is an all-in-one toolkit for JavaScript and TypeScript apps. It ships as a single executable called `bun`. WHEN: work with the bun javascript project. Triggers: use bun, install bun, how to use bun.
 ---
 
 # bun
@@ -9,9 +9,15 @@ Bun is an all-in-one toolkit for JavaScript and TypeScript apps. It ships as a s
 
 ## When to Use
 
-Use when working with the bun JavaScript library.
+- Work with the bun JavaScript project
+
+## When NOT to Use
+
+- Projects using Go or Java (different ecosystem)
 
 ## Quick Start
+
+### Install
 
 Bun supports Linux (x64 & arm64), macOS (x64 & Apple Silicon), and Windows (x64 & arm64).
 
@@ -23,7 +29,7 @@ Bun supports Linux (x64 & arm64), macOS (x64 & Apple Silicon), and Windows (x64 
 
 ## Project Info
 
-- **Language:** JavaScript, TypeScript, C++, C, Rust, Python, Ruby
+- **Language:** JavaScript, TypeScript, Zig, C++, C, Rust, Python, Ruby
 - **Tests:** Yes
 
 ## File Structure
@@ -49,4 +55,5 @@ Bun supports Linux (x64 & arm64), macOS (x64 & Apple Silicon), and Windows (x64 
 │   ├── log/
 │   ├── module-loader/
 │   ├── modules/
+```
 ```

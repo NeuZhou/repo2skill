@@ -1,26 +1,31 @@
 ---
 name: ruff
-description: An extremely fast Python linter and code formatter, written in Rust. Language: Python.
+description: [**Docs**](https://docs.astral.sh/ruff/) | [**Playground**](https://play.ruff.rs/) WHEN: make http requests, lint or format code. Triggers: use ruff, install ruff, how to use ruff, make http request.
 ---
 
 # ruff
 
-An extremely fast Python linter and code formatter, written in Rust.
+[**Docs**](https://docs.astral.sh/ruff/) | [**Playground**](https://play.ruff.rs/)
 
 ## When to Use
 
-Use when working with the ruff Python library.
+- Make HTTP requests
+- Lint or format code
+
+## When NOT to Use
+
+- Projects using Go or Java (different ecosystem)
 
 ## Quick Start
+
+### Install
 
 ```shell
 uvx ruff check   # Lint all files in the current directory.
 uvx ruff format  # Format all files in the current directory.
 ```
 
-## Usage
-
-To run Ruff as a linter, try any of the following:
+### Basic Usage
 
 ```shell
 ruff check                          # Lint all files in the current directory (and any subdirectories).
@@ -30,8 +35,6 @@ ruff check path/to/code/to/file.py  # Lint `file.py`.
 ruff check @arguments.txt           # Lint using an input file, treating its contents as newline-delimited command-line arguments.
 ```
 
-Or, to run Ruff as a formatter:
-
 ```shell
 ruff format                          # Format all files in the current directory (and any subdirectories).
 ruff format path/to/code/            # Format all files in `/path/to/code` (and any subdirectories).
@@ -39,8 +42,6 @@ ruff format path/to/code/*.py        # Format all `.py` files in `/path/to/code`
 ruff format path/to/code/to/file.py  # Format `file.py`.
 ruff format @arguments.txt           # Format using an input file, treating its contents as newline-delimited command-line arguments.
 ```
-
-Ruff can also be used as a [pre-commit](https://pre-commit.com/) hook via [`ruff-pre-commit`](https://github.com/astral-sh/ruff-pre-commit):
 
 ```yaml
 - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -52,22 +53,6 @@ Ruff can also be used as a [pre-commit](https://pre-commit.com/) hook via [`ruff
       args: [ --fix ]
     # Run the formatter.
     - id: ruff-format
-```
-
-Ruff can also be used as a [VS Code extension](https://github.com/astral-sh/ruff-vscode) or with [various other editors](https://docs.astral.sh/ruff/editors/setup).
-
-Ruff can also be used as a [GitHub Action](https://github.com/features/actions) via
-[`ruff-action`](https://github.com/astral-sh/ruff-action):
-
-```yaml
-name: Ruff
-on: [ push, pull_request ]
-jobs:
-  ruff:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/ruff-action@v3
 ```
 
 ## Project Info

@@ -1,33 +1,35 @@
 ---
 name: commander.js
-description: the complete solution for node.js command-line programs Language: JavaScript.
+description: The complete solution for [node.js](http://nodejs.org) command-line interfaces. WHEN: make http requests. Triggers: use commander.js, install commander.js, how to use commander.js, make http request.
 ---
 
 # commander.js
 
-the complete solution for node.js command-line programs
+The complete solution for [node.js](http://nodejs.org) command-line interfaces.
 
 ## When to Use
 
-Use when working with the commander.js JavaScript library.
+- Make HTTP requests
+
+## When NOT to Use
+
+- Projects using Python or Rust (different ecosystem)
 
 ## Quick Start
+
+### Install
 
 ```sh
 npm install commander
 ```
 
-## Usage
-
-This allows you to customise the usage description in the first line of the help. Given:
+### Basic Usage
 
 ```js
 program
   .name("my-command")
   .usage("[global options] command")
 ```
-
-The help will start with:
 
 ```Text
 Usage: my-command [global options] command
