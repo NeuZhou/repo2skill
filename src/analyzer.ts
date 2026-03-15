@@ -10,12 +10,18 @@ export interface CLICommand {
 export interface RepoAnalysis {
   name: string;
   description: string;
+  richDescription: string;
+  whenToUse: string[];
+  whenNotToUse: string[];
+  triggerPhrases: string[];
   language: string;
   languages: string[];
   cliCommands: CLICommand[];
   installInstructions: string;
   usageSection: string;
+  usageExamples: string[];
   apiSection: string;
+  examplesSection: string;
   readmeRaw: string;
   readmeFirstParagraph: string;
   dependencies: string[];
@@ -30,12 +36,18 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
   const analysis: RepoAnalysis = {
     name: repoName,
     description: "",
+    richDescription: "",
+    whenToUse: [],
+    whenNotToUse: [],
+    triggerPhrases: [],
     language: "unknown",
     languages: [],
     cliCommands: [],
     installInstructions: "",
     usageSection: "",
+    usageExamples: [],
     apiSection: "",
+    examplesSection: "",
     readmeRaw: "",
     readmeFirstParagraph: "",
     dependencies: [],
@@ -63,7 +75,18 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
     analysis.sections = extractSections(analysis.readmeRaw);
     analysis.usageSection = analysis.sections["usage"] || analysis.sections["getting started"] || "";
     analysis.apiSection = analysis.sections["api"] || analysis.sections["api reference"] || "";
-    analysis.installInstructions = analysis.sections["install"] || analysis.sections["installation"] || analysis.sections["getting started"] || "";
+    analysis.examplesSection = analysis.sections["examples"] || analysis.sections["example"] || "";
+    analysis.installInstructions = analysis.sections["install"] || analysis.sections["installation"] || analysis.sections["setup"] || analysis.sections["getting started"] || "";
+
+    // Extract all code examples from usage/examples/API sections
+    analysis.usageExamples = [
+      ...extractCodeBlocks(analysis.usageSection),
+      ...extractCodeBlocks(analysis.examplesSection),
+      ...extractCodeBlocks(analysis.apiSection),
+    ];
+
+    // Rich description: prefer first meaningful README paragraph over package.json one-liner
+    analysis.richDescription = extractRichDescription(analysis.readmeRaw);
   }
 
   // package.json (Node.js)
@@ -99,6 +122,14 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
     } catch {}
   }
 
+  // setup.py (Python fallback)
+  const setupPyPath = path.join(repoDir, "setup.py");
+  if (fs.existsSync(setupPyPath) && !analysis.description) {
+    const content = fs.readFileSync(setupPyPath, "utf-8");
+    const descMatch = content.match(/description\s*=\s*["']([^"']+)["']/);
+    if (descMatch) analysis.description = descMatch[1];
+  }
+
   // Cargo.toml (Rust)
   const cargoPath = path.join(repoDir, "Cargo.toml");
   if (fs.existsSync(cargoPath)) {
@@ -109,17 +140,56 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
       const pkg = parsed.package || {};
       analysis.description = analysis.description || pkg.description || "";
       analysis.license = pkg.license || "";
-      // If it has [[bin]] or src/main.rs, it's a CLI
       if (parsed.bin || fs.existsSync(path.join(repoDir, "src", "main.rs"))) {
         analysis.cliCommands.push({ name: pkg.name || repoName });
       }
     } catch {}
   }
 
+  // go.mod (Go)
+  const goModPath = path.join(repoDir, "go.mod");
+  if (fs.existsSync(goModPath)) {
+    const content = fs.readFileSync(goModPath, "utf-8");
+    const moduleMatch = content.match(/^module\s+(.+)$/m);
+    if (moduleMatch) {
+      const moduleName = moduleMatch[1].trim();
+      if (!analysis.entryPoints.includes(moduleName)) {
+        analysis.entryPoints.push(moduleName);
+      }
+    }
+    // Extract dependencies
+    const requireBlock = content.match(/require\s*\(([\s\S]*?)\)/);
+    if (requireBlock) {
+      const deps = requireBlock[1].match(/^\s*(\S+)\s+/gm);
+      if (deps) {
+        analysis.dependencies.push(...deps.map(d => d.trim().split(/\s+/)[0]));
+      }
+    }
+    // Check for main.go -> CLI tool
+    if (fs.existsSync(path.join(repoDir, "main.go")) || fs.existsSync(path.join(repoDir, "cmd"))) {
+      const name = moduleMatch ? moduleMatch[1].trim().split("/").pop()! : repoName;
+      if (!analysis.cliCommands.some(c => c.name === name)) {
+        analysis.cliCommands.push({ name });
+      }
+    }
+    if (!analysis.languages.includes("Go")) analysis.languages.unshift("Go");
+    if (analysis.language === "unknown") analysis.language = "Go";
+  }
+
   // Fallback description from README
   if (!analysis.description) {
     analysis.description = analysis.readmeFirstParagraph;
   }
+
+  // Use rich description if available, otherwise fall back to description
+  if (!analysis.richDescription) {
+    analysis.richDescription = analysis.description;
+  }
+
+  // Generate "when to use" / "when not to use" / trigger phrases
+  analysis.whenToUse = generateWhenToUse(analysis);
+  analysis.whenNotToUse = generateWhenNotToUse(analysis);
+  analysis.triggerPhrases = generateTriggerPhrases(analysis);
 
   return analysis;
 }
@@ -139,8 +209,7 @@ function extractFirstParagraph(readme: string): string {
   for (const line of lines) {
     const trimmed = line.trim();
     if (!started) {
-      // Skip headings, badges, blank lines
-      if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("[") || trimmed.startsWith("!") || trimmed.startsWith("<")) continue;
+      if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("[") || trimmed.startsWith("!") || trimmed.startsWith("<") || trimmed.startsWith("---")) continue;
       started = true;
     }
     if (started) {
@@ -149,6 +218,51 @@ function extractFirstParagraph(readme: string): string {
     }
   }
   return result.join(" ").slice(0, 300);
+}
+
+/**
+ * Extract a rich description: first 1-3 meaningful paragraphs from README,
+ * skipping badges, headings, HTML blocks, and images.
+ */
+function extractRichDescription(readme: string): string {
+  const lines = readme.split("\n");
+  const paragraphs: string[] = [];
+  let current: string[] = [];
+  let inCodeBlock = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith("```")) { inCodeBlock = !inCodeBlock; continue; }
+    if (inCodeBlock) continue;
+
+    // Skip headings, badges, images, HTML
+    if (trimmed.startsWith("#") || trimmed.startsWith("[!") || trimmed.startsWith("![") || trimmed.startsWith("<") || trimmed.startsWith("---")) {
+      if (current.length > 0) {
+        paragraphs.push(current.join(" "));
+        current = [];
+      }
+      continue;
+    }
+
+    // Skip badge-only lines
+    if (/^\[!\[.*\]\(.*\)\]\(.*\)$/.test(trimmed) || /^!\[.*\]\(.*\)$/.test(trimmed)) continue;
+
+    if (!trimmed) {
+      if (current.length > 0) {
+        paragraphs.push(current.join(" "));
+        current = [];
+      }
+      continue;
+    }
+
+    current.push(trimmed);
+  }
+  if (current.length > 0) paragraphs.push(current.join(" "));
+
+  // Take first 2 meaningful paragraphs (min 20 chars each)
+  const meaningful = paragraphs.filter(p => p.length >= 20);
+  return meaningful.slice(0, 2).join("\n\n").slice(0, 600);
 }
 
 function extractSections(readme: string): Record<string, string> {
@@ -175,6 +289,17 @@ function extractSections(readme: string): Record<string, string> {
   return sections;
 }
 
+function extractCodeBlocks(text: string): string[] {
+  if (!text) return [];
+  const blocks: string[] = [];
+  const regex = /```[\s\S]*?```/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    blocks.push(match[0]);
+  }
+  return blocks;
+}
+
 function detectLanguages(files: string[]): string[] {
   const counts: Record<string, number> = {};
   const extMap: Record<string, string> = {
@@ -191,6 +316,13 @@ function detectLanguages(files: string[]): string[] {
     ".c": "C",
     ".swift": "Swift",
     ".kt": "Kotlin",
+    ".lua": "Lua",
+    ".zig": "Zig",
+    ".dart": "Dart",
+    ".ex": "Elixir", ".exs": "Elixir",
+    ".hs": "Haskell",
+    ".scala": "Scala",
+    ".r": "R", ".R": "R",
   };
   for (const f of files) {
     const ext = path.extname(f).toLowerCase();
@@ -200,6 +332,71 @@ function detectLanguages(files: string[]): string[] {
   return Object.entries(counts)
     .sort((a, b) => b[1] - a[1])
     .map(([lang]) => lang);
+}
+
+function generateWhenToUse(analysis: RepoAnalysis): string[] {
+  const items: string[] = [];
+  const isCLI = analysis.cliCommands.length > 0;
+
+  if (isCLI) {
+    for (const cmd of analysis.cliCommands) {
+      items.push(`Run \`${cmd.name}\` commands`);
+    }
+  }
+
+  // Infer from description keywords
+  const desc = (analysis.richDescription + " " + analysis.description).toLowerCase();
+  if (desc.includes("http") || desc.includes("request")) items.push("Make HTTP requests");
+  if (desc.includes("test")) items.push("Run or write tests");
+  if (desc.includes("lint") || desc.includes("format")) items.push("Lint or format code");
+  if (desc.includes("build") || desc.includes("bundl")) items.push("Build or bundle projects");
+  if (desc.includes("parse") || desc.includes("pars")) items.push("Parse data or files");
+  if (desc.includes("search") || desc.includes("find") || desc.includes("grep")) items.push("Search through files or text");
+  if (desc.includes("color") || desc.includes("terminal") || desc.includes("ansi")) items.push("Style terminal output");
+  if (desc.includes("cli") || desc.includes("command")) items.push("Build command-line interfaces");
+
+  if (items.length === 0) {
+    items.push(`Work with the ${analysis.name} ${analysis.language} project`);
+  }
+
+  return [...new Set(items)].slice(0, 6);
+}
+
+function generateWhenNotToUse(analysis: RepoAnalysis): string[] {
+  const items: string[] = [];
+  const isCLI = analysis.cliCommands.length > 0;
+
+  if (isCLI) items.push("GUI or web-based workflows where CLI is not available");
+  if (analysis.language !== "unknown") {
+    const others = ["Python", "JavaScript", "TypeScript", "Rust", "Go", "Java"]
+      .filter(l => !analysis.languages.includes(l))
+      .slice(0, 2);
+    if (others.length > 0) items.push(`Projects using ${others.join(" or ")} (different ecosystem)`);
+  }
+
+  return items.slice(0, 3);
+}
+
+function generateTriggerPhrases(analysis: RepoAnalysis): string[] {
+  const phrases: string[] = [];
+  const name = analysis.name.toLowerCase();
+
+  phrases.push(`use ${name}`);
+  phrases.push(`install ${name}`);
+  phrases.push(`how to use ${name}`);
+
+  for (const cmd of analysis.cliCommands) {
+    phrases.push(`run ${cmd.name}`);
+    phrases.push(`${cmd.name} command`);
+  }
+
+  const desc = (analysis.richDescription + " " + analysis.description).toLowerCase();
+  if (desc.includes("http") || desc.includes("request")) phrases.push("make http request", "fetch url");
+  if (desc.includes("search") || desc.includes("grep")) phrases.push("search files", "find in code");
+  if (desc.includes("lint") || desc.includes("format")) phrases.push("lint code", "format code");
+  if (desc.includes("json")) phrases.push("parse json", "process json");
+
+  return [...new Set(phrases)].slice(0, 8);
 }
 
 function buildFileTree(dir: string, maxDepth: number, prefix = "", depth = 0): string {
