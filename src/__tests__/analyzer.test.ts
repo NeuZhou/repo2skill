@@ -100,6 +100,7 @@ describe("categorizeProject", () => {
       features: [],
       isMonorepo: false,
       monorepoPackages: [],
+      keyApi: [],
       ...overrides,
     };
   }

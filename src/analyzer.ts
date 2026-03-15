@@ -39,6 +39,7 @@ export interface RepoAnalysis {
     exposedPorts: string[];
     entrypoint: string;
   };
+  keyApi: string[];
 }
 
 export async function analyzeRepo(repoDir: string, repoName: string): Promise<RepoAnalysis> {
@@ -69,6 +70,7 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
     fileTree: "",
     isMonorepo: false,
     monorepoPackages: [],
+    keyApi: [],
   };
 
   // File tree (top 2 levels)
@@ -466,6 +468,83 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
     if (analysis.language === "unknown") analysis.language = "Swift";
   }
 
+  // pubspec.yaml (Dart/Flutter)
+  const pubspecPath = path.join(repoDir, "pubspec.yaml");
+  if (fs.existsSync(pubspecPath)) {
+    const content = fs.readFileSync(pubspecPath, "utf-8");
+    const nameMatch = content.match(/^name:\s*(.+)$/m);
+    const descMatch = content.match(/^description:\s*(.+)$/m);
+    const dartName = nameMatch ? nameMatch[1].trim() : repoName;
+    if (descMatch) analysis.description = analysis.description || descMatch[1].trim();
+    // Extract dependencies
+    const depsBlock = content.match(/^dependencies:\s*\n((?:\s+.+\n)*)/m);
+    if (depsBlock) {
+      const depLines = depsBlock[1].match(/^\s{2}(\w[\w_-]*):/gm);
+      if (depLines) {
+        analysis.dependencies.push(...depLines.map(d => d.trim().replace(/:$/, "")));
+      }
+    }
+    const isFlutter = content.includes("flutter:") || fs.existsSync(path.join(repoDir, "android")) || fs.existsSync(path.join(repoDir, "ios"));
+    const cmd = isFlutter ? "flutter pub add" : "dart pub add";
+    if (!analysis.installInstructions) {
+      analysis.installInstructions = `\`\`\`bash\n${cmd} ${dartName}\n\`\`\``;
+    }
+    analysis.entryPoints.push(dartName);
+    const lang = isFlutter ? "Dart" : "Dart";
+    if (!analysis.languages.includes("Dart")) analysis.languages.unshift("Dart");
+    if (analysis.language === "unknown") analysis.language = "Dart";
+  }
+
+  // build.zig / build.zig.zon (Zig)
+  const buildZigPath = path.join(repoDir, "build.zig");
+  const buildZigZonPath = path.join(repoDir, "build.zig.zon");
+  if (fs.existsSync(buildZigPath) || fs.existsSync(buildZigZonPath)) {
+    let zigName = repoName;
+    if (fs.existsSync(buildZigZonPath)) {
+      const content = fs.readFileSync(buildZigZonPath, "utf-8");
+      const nameMatch = content.match(/\.name\s*=\s*"([^"]+)"/);
+      if (nameMatch) zigName = nameMatch[1];
+    } else if (fs.existsSync(buildZigPath)) {
+      const content = fs.readFileSync(buildZigPath, "utf-8");
+      const nameMatch = content.match(/\.name\s*=\s*"([^"]+)"/);
+      if (nameMatch) zigName = nameMatch[1];
+    }
+    analysis.description = analysis.description || `${zigName} - a Zig project`;
+    if (!analysis.installInstructions) {
+      analysis.installInstructions = `\`\`\`bash\nzig build\n\`\`\``;
+    }
+    analysis.entryPoints.push(zigName);
+    if (!analysis.languages.includes("Zig")) analysis.languages.unshift("Zig");
+    if (analysis.language === "unknown") analysis.language = "Zig";
+  }
+
+  // build.sbt (Scala)
+  const buildSbtPath = path.join(repoDir, "build.sbt");
+  if (fs.existsSync(buildSbtPath)) {
+    const content = fs.readFileSync(buildSbtPath, "utf-8");
+    const nameMatch = content.match(/name\s*:=\s*"([^"]+)"/);
+    const versionMatch = content.match(/version\s*:=\s*"([^"]+)"/);
+    const descMatch = content.match(/description\s*:=\s*"([^"]+)"/);
+    const scalaName = nameMatch ? nameMatch[1] : repoName;
+    if (descMatch) analysis.description = analysis.description || descMatch[1];
+    if (versionMatch) analysis.entryPoints.push(`${scalaName}@${versionMatch[1]}`);
+    // Extract libraryDependencies
+    const depRegex = /"([^"]+)"\s*%%?\s*"([^"]+)"\s*%\s*"([^"]+)"/g;
+    let dm;
+    while ((dm = depRegex.exec(content)) !== null) {
+      analysis.dependencies.push(`${dm[1]}:${dm[2]}:${dm[3]}`);
+    }
+    if (!analysis.installInstructions) {
+      analysis.installInstructions = `\`\`\`scala\n// In build.sbt\nlibraryDependencies += "com.example" %% "${scalaName}" % "${versionMatch?.[1] || "LATEST"}"\n\`\`\``;
+    }
+    analysis.entryPoints.push(scalaName);
+    if (!analysis.languages.includes("Scala")) analysis.languages.unshift("Scala");
+    if (analysis.language === "unknown") analysis.language = "Scala";
+  }
+
+  // Key API extraction
+  analysis.keyApi = extractKeyApi(repoDir, analysis, allFiles);
+
   // Dockerfile
   const dockerfilePath = findFile(repoDir, ["Dockerfile", "dockerfile"]);
   if (dockerfilePath) {
@@ -794,6 +873,80 @@ function generateTriggerPhrases(analysis: RepoAnalysis): string[] {
   if (desc.includes("json")) phrases.push("parse json", "process json");
 
   return [...new Set(phrases)].slice(0, 8);
+}
+
+function extractKeyApi(repoDir: string, analysis: RepoAnalysis, allFiles: string[]): string[] {
+  const exports: string[] = [];
+
+  // Node.js: parse package.json main/exports, scan for export statements
+  const pkgPath = path.join(repoDir, "package.json");
+  if (fs.existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+      const mainFile = pkg.main || pkg.exports?.["."]?.import || pkg.exports?.["."]?.require || pkg.exports?.["."] || "index.js";
+      const candidates = [mainFile, "index.ts", "index.js", "src/index.ts", "src/index.js"].map(f => path.join(repoDir, f));
+      for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) {
+          try {
+            const content = fs.readFileSync(candidate, "utf-8");
+            // export function/class/const/type
+            const exportRegex = /export\s+(?:default\s+)?(?:async\s+)?(?:function|class|const|type|interface|enum)\s+(\w+)/g;
+            let m;
+            while ((m = exportRegex.exec(content)) !== null) {
+              if (!exports.includes(m[1])) exports.push(m[1]);
+            }
+            // export { ... }
+            const reExportRegex = /export\s*\{([^}]+)\}/g;
+            while ((m = reExportRegex.exec(content)) !== null) {
+              const names = m[1].split(",").map(n => n.trim().split(/\s+as\s+/).pop()!.trim()).filter(Boolean);
+              for (const name of names) {
+                if (name && !exports.includes(name)) exports.push(name);
+              }
+            }
+          } catch {}
+          if (exports.length > 0) break;
+        }
+      }
+    } catch {}
+  }
+
+  // Python: scan __init__.py
+  if (exports.length === 0) {
+    const initFiles = allFiles.filter(f => f.endsWith("__init__.py")).sort((a, b) => a.length - b.length);
+    for (const initFile of initFiles.slice(0, 2)) {
+      try {
+        const content = fs.readFileSync(path.join(repoDir, initFile), "utf-8");
+        // from .x import Y
+        const importRegex = /from\s+\S+\s+import\s+([^(\n]+)/g;
+        let m;
+        while ((m = importRegex.exec(content)) !== null) {
+          const names = m[1].split(",").map(n => n.trim().split(/\s+as\s+/).pop()!.trim()).filter(n => n && !n.startsWith("_"));
+          for (const name of names) {
+            if (!exports.includes(name)) exports.push(name);
+          }
+        }
+        // __all__ = [...]
+        const allMatch = content.match(/__all__\s*=\s*\[([^\]]+)\]/);
+        if (allMatch) {
+          const names = allMatch[1].match(/["'](\w+)["']/g);
+          if (names) {
+            for (const n of names) {
+              const name = n.replace(/["']/g, "");
+              if (!exports.includes(name)) exports.push(name);
+            }
+          }
+        }
+        // class/def at top level
+        const defRegex = /^(?:class|def)\s+(\w+)/gm;
+        while ((m = defRegex.exec(content)) !== null) {
+          if (!m[1].startsWith("_") && !exports.includes(m[1])) exports.push(m[1]);
+        }
+      } catch {}
+      if (exports.length > 0) break;
+    }
+  }
+
+  return exports.slice(0, 10);
 }
 
 function buildFileTree(dir: string, maxDepth: number, prefix = "", depth = 0): string {

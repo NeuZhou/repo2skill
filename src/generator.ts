@@ -262,6 +262,16 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
     lines.push("");
   }
 
+  // Key API
+  if (analysis.keyApi.length > 0) {
+    lines.push("## Key API");
+    lines.push("");
+    for (const api of analysis.keyApi) {
+      lines.push(`- \`${api}\``);
+    }
+    lines.push("");
+  }
+
   // Docker info
   if (analysis.dockerInfo) {
     lines.push("## Docker");
