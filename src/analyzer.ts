@@ -202,7 +202,7 @@ function findFile(dir: string, names: string[]): string | null {
   return null;
 }
 
-function stripHtmlTags(text: string): string {
+export function stripHtmlTags(text: string): string {
   return text
     .replace(/<[^>]+>/g, "")   // Remove HTML tags
     .replace(/&[a-z]+;/gi, "") // Remove HTML entities
@@ -210,7 +210,7 @@ function stripHtmlTags(text: string): string {
     .trim();
 }
 
-function extractFirstParagraph(readme: string): string {
+export function extractFirstParagraph(readme: string): string {
   const lines = readme.split("\n");
   let started = false;
   let inHtmlBlock = false;
@@ -370,10 +370,10 @@ function detectLanguages(files: string[]): string[] {
     .map(([lang]) => lang);
 }
 
-function categorizeProject(analysis: RepoAnalysis): string {
+export function categorizeProject(analysis: RepoAnalysis): string {
   const desc = (analysis.richDescription + " " + analysis.description + " " + analysis.readmeFirstParagraph).toLowerCase();
   if (desc.includes("server") || desc.includes("web framework") || desc.includes("web server") || desc.includes("http server") || desc.includes("api framework")) return "server-framework";
-  if (desc.includes("cli") || desc.includes("command-line") || desc.includes("command line")) return "cli-tool";
+  if (/\bcli\b/.test(desc) || desc.includes("command-line") || desc.includes("command line")) return "cli-tool";
   if (desc.includes("client") || desc.includes("http client") || desc.includes("fetch") || desc.includes("request library")) return "http-client";
   if (desc.includes("framework")) return "framework";
   if (desc.includes("library") || desc.includes("utility") || desc.includes("utilities")) return "library";
