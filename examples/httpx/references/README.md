@@ -1,340 +1,147 @@
-<h1 align="center">
-  <img src="static/httpx-logo.png" alt="httpx" width="200px">
-  <br>
-</h1>
-
-
-
 <p align="center">
-<a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-_red.svg"></a>
-<a href="https://goreportcard.com/badge/github.com/projectdiscovery/httpx"><img src="https://goreportcard.com/badge/github.com/projectdiscovery/httpx"></a>
-<a href="https://github.com/projectdiscovery/httpx/releases"><img src="https://img.shields.io/github/release/projectdiscovery/httpx"></a>
-<a href="https://hub.docker.com/r/projectdiscovery/httpx"><img src="https://img.shields.io/docker/pulls/projectdiscovery/httpx.svg"></a>
-<a href="https://twitter.com/pdiscoveryio"><img src="https://img.shields.io/twitter/follow/pdiscoveryio.svg?logo=twitter"></a>
-<a href="https://discord.gg/projectdiscovery"><img src="https://img.shields.io/discord/695645237418131507.svg?logo=discord"></a>
+  <a href="https://www.python-httpx.org/"><img width="350" height="208" src="https://raw.githubusercontent.com/encode/httpx/master/docs/img/butterfly.png" alt='HTTPX'></a>
 </p>
 
+<p align="center"><strong>HTTPX</strong> <em>- A next-generation HTTP client for Python.</em></p>
+
 <p align="center">
-  <a href="#features">Features</a> •
-  <a href="#installation-instructions">Installation</a> •
-  <a href="#usage">Usage</a> •
-  <a href="https://docs.projectdiscovery.io/tools/httpx/">Documentation</a> •
-  <a href="#notes">Notes</a> •
-  <a href="https://discord.gg/projectdiscovery">Join Discord</a>
+<a href="https://github.com/encode/httpx/actions">
+    <img src="https://github.com/encode/httpx/workflows/Test%20Suite/badge.svg" alt="Test Suite">
+</a>
+<a href="https://pypi.org/project/httpx/">
+    <img src="https://badge.fury.io/py/httpx.svg" alt="Package version">
+</a>
 </p>
 
+HTTPX is a fully featured HTTP client library for Python 3. It includes **an integrated command line client**, has support for both **HTTP/1.1 and HTTP/2**, and provides both **sync and async APIs**.
 
-`httpx` is a fast and multi-purpose HTTP toolkit that allows running multiple probes using the [retryablehttp](https://github.com/projectdiscovery/retryablehttp-go) library. It is designed to maintain result reliability with an increased number of threads.
+---
 
-# Features
+Install HTTPX using pip:
 
-<h1 align="center">
-  <img src="https://user-images.githubusercontent.com/8293321/135731750-4c1d38b1-bd2a-40f9-88e9-3c4b9f6da378.png" alt="httpx" width="700px">
-  <br>
-</h1>
-
- - Simple and modular code base making it easy to contribute.
- - Fast And fully configurable flags to probe multiple elements.
- - Supports multiple HTTP based probings.
- - Smart auto fallback from https to http as default. 
- - Supports hosts, URLs and CIDR as input.
- - Handles edge cases doing retries, backoffs etc for handling WAFs.
-
-### Supported probes
-
-| Probes          | Default check | Probes         | Default check |
-|-----------------|---------------|----------------|---------------|
-| URL             | true          | IP             | true          |
-| Title           | true          | CNAME          | true          |
-| Status Code     | true          | Raw HTTP       | false         |
-| Content Length  | true          | HTTP2          | false         |
-| TLS Certificate | true          | HTTP Pipeline  | false         |
-| CSP Header      | true          | Virtual host   | false         |
-| Line Count      | true          | Word Count     | true          |
-| Location Header | true          | CDN            | false         |
-| Web Server      | true          | Paths          | false         |
-| Web Socket      | true          | Ports          | false         |
-| Response Time   | true          | Request Method | true          |
-| Favicon Hash    | false         | Probe  Status  | false         |
-| Body Hash       | true          | Header  Hash   | true          |
-| Redirect chain  | false         | URL Scheme     | true          |
-| JARM Hash       | false         | ASN            | false         |
-
-# Installation Instructions
-
-`httpx` requires **go >=1.25.0** to install successfully. Run the following command to get the repo:
-
-```sh
-go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+```shell
+$ pip install httpx
 ```
 
-To learn more about installing httpx, see https://docs.projectdiscovery.io/tools/httpx/install.
+Now, let's get started:
 
-| :exclamation:  **Disclaimer**  |
-|---------------------------------|
-| **This project is in active development**. Expect breaking changes with releases. Review the changelog before updating. |
-| This project was primarily built to be used as a standalone CLI tool. **Running it as a service may pose security risks.** It's recommended to use with caution and additional security measures. |
-
-# Usage
-
-```sh
-httpx -h
+```pycon
+>>> import httpx
+>>> r = httpx.get('https://www.example.org/')
+>>> r
+<Response [200 OK]>
+>>> r.status_code
+200
+>>> r.headers['content-type']
+'text/html; charset=UTF-8'
+>>> r.text
+'<!doctype html>\n<html>\n<head>\n<title>Example Domain</title>...'
 ```
 
-This will display help for the tool. Here are all the switches it supports.
+Or, using the command-line client.
 
-
-```console
-httpx is a fast and multi-purpose HTTP toolkit that allows running multiple probes using the retryablehttp library.
-
-Usage:
-  ./httpx [flags]
-
-Flags:
-INPUT:
-   -l, -list string              input file containing list of hosts to process
-   -rr, -request string          file containing raw request
-   -u, -target string[]          input target host(s) to probe
-   -im, -input-mode string       mode of input file (burp)
-
-PROBES:
-   -sc, -status-code                      display response status-code
-   -cl, -content-length                   display response content-length
-   -ct, -content-type                     display response content-type
-   -location                              display response redirect location
-   -favicon                               display mmh3 hash for '/favicon.ico' file
-   -hash string                           display response body hash (supported: md5,mmh3,simhash,sha1,sha256,sha512)
-   -jarm                                  display jarm fingerprint hash
-   -rt, -response-time                    display response time
-   -lc, -line-count                       display response body line count
-   -wc, -word-count                       display response body word count
-   -title                                 display page title
-   -bp, -body-preview                     display first N characters of response body (default 100)
-   -server, -web-server                   display server name
-   -td, -tech-detect                      display technology in use based on wappalyzer dataset
-   -cff, -custom-fingerprint-file string  path to a custom fingerprint file for technology detection
-   -method                                display http request method
-   -ws, -websocket                        display server using websocket
-   -ip                                    display host ip
-   -cname                                 display host cname
-   -extract-fqdn, -efqdn                  get domain and subdomains from response body and header in jsonl/csv output
-   -asn                                   display host asn information
-   -cdn                                   display cdn/waf in use (default true)
-   -probe                                 display probe status
-
-HEADLESS:
-   -ss, -screenshot                 enable saving screenshot of the page using headless browser
-   -system-chrome                   enable using local installed chrome for screenshot
-   -ho, -headless-options string[]  start headless chrome with additional options
-   -esb, -exclude-screenshot-bytes  enable excluding screenshot bytes from json output
-   -ehb, -exclude-headless-body     enable excluding headless header from json output
-   -no-screenshot-full-page         disable saving full page screenshot
-   -st, -screenshot-timeout value   set timeout for screenshot in seconds (default 10s)
-   -sid, -screenshot-idle value     set idle time before taking screenshot in seconds (default 1s)
-   -jsc, -javascript-code string[]  execute JavaScript code after navigation
-
-MATCHERS:
-   -mc, -match-code string            match response with specified status code (-mc 200,302)
-   -ml, -match-length string          match response with specified content length (-ml 100,102)
-   -mlc, -match-line-count string     match response body with specified line count (-mlc 423,532)
-   -mwc, -match-word-count string     match response body with specified word count (-mwc 43,55)
-   -mfc, -match-favicon string[]      match response with specified favicon hash (-mfc 1494302000)
-   -ms, -match-string string[]        match response with specified string (-ms admin)
-   -mr, -match-regex string[]         match response with specified regex (-mr admin)
-   -mcdn, -match-cdn string[]         match host with specified cdn provider (cloudfront, fastly, google, etc.)
-   -mrt, -match-response-time string  match response with specified response time in seconds (-mrt '< 1')
-   -mdc, -match-condition string      match response with dsl expression condition
-
-EXTRACTOR:
-   -er, -extract-regex string[]   display response content with matched regex
-   -ep, -extract-preset string[]  display response content matched by a pre-defined regex (url,ipv4,mail)
-
-FILTERS:
-   -fc, -filter-code string               filter response with specified status code (-fc 403,401)
-   -fpt, -filter-page-type string[]       filter response with specified page type (e.g. -fpt login,captcha,parked)
-   -fep, -filter-error-page               [DEPRECATED: use -fpt] filter response with ML based error page detection
-   -fd, -filter-duplicates                filter out near-duplicate responses (only first response is retained)
-   -fl, -filter-length string             filter response with specified content length (-fl 23,33)
-   -flc, -filter-line-count string        filter response body with specified line count (-flc 423,532)
-   -fwc, -filter-word-count string        filter response body with specified word count (-fwc 423,532)
-   -ffc, -filter-favicon string[]         filter response with specified favicon hash (-ffc 1494302000)
-   -fs, -filter-string string[]           filter response with specified string (-fs admin)
-   -fe, -filter-regex string[]            filter response with specified regex (-fe admin)
-   -fcdn, -filter-cdn string[]            filter host with specified cdn provider (cloudfront, fastly, google, etc.)
-   -frt, -filter-response-time string     filter response with specified response time in seconds (-frt '> 1')
-   -fdc, -filter-condition string         filter response with dsl expression condition
-   -strip                                 strips all tags in response. supported formats: html,xml (default html)
-   -lof, -list-output-fields              list of fields to output (comma separated)
-   -eof, -exclude-output-fields string[]  exclude output fields output based on a condition
-
-RATE-LIMIT:
-   -t, -threads int              number of threads to use (default 50)
-   -rl, -rate-limit int          maximum requests to send per second (default 150)
-   -rlm, -rate-limit-minute int  maximum number of requests to send per minute
-
-MISCELLANEOUS:
-   -pa, -probe-all-ips        probe all the ips associated with same host
-   -p, -ports string[]        ports to probe (nmap syntax: eg http:1,2-10,11,https:80)
-   -path string               path or list of paths to probe (comma-separated, file)
-   -tls-probe                 send http probes on the extracted TLS domains (dns_name)
-   -csp-probe                 send http probes on the extracted CSP domains
-   -tls-grab                  perform TLS(SSL) data grabbing
-   -pipeline                  probe and display server supporting HTTP1.1 pipeline
-   -http2                     probe and display server supporting HTTP2
-   -vhost                     probe and display server supporting VHOST
-   -ldv, -list-dsl-variables  list json output field keys name that support dsl matcher/filter
-
-UPDATE:
-   -up, -update                 update httpx to latest version
-   -duc, -disable-update-check  disable automatic httpx update check
-
-OUTPUT:
-   -o, -output string                     file to write output results
-   -oa, -output-all                       filename to write output results in all formats
-   -sr, -store-response                   store http response to output directory
-   -srd, -store-response-dir string       store http response to custom directory
-   -ob, -omit-body                        omit response body in output
-   -csv                                   store output in csv format
-   -csvo, -csv-output-encoding string     define output encoding
-   -j, -json                              store output in JSONL(ines) format
-   -irh, -include-response-header         include http response (headers) in JSON output (-json only)
-   -irr, -include-response                include http request/response (headers + body) in JSON output (-json only)
-   -irrb, -include-response-base64        include base64 encoded http request/response in JSON output (-json only)
-   -include-chain                         include redirect http chain in JSON output (-json only)
-   -store-chain                           include http redirect chain in responses (-sr only)
-   -svrc, -store-vision-recon-cluster     include visual recon clusters (-ss and -sr only)
-   -pr, -protocol string                  protocol to use (unknown, http11, http2, http3)
-   -fepp, -filter-error-page-path string  path to store filtered error pages (default "filtered_error_page.json")
-   -rdb, -result-db                       store results in database
-   -rdbc, -result-db-config string        path to database config file
-   -rdbt, -result-db-type string          database type (mongodb, postgres, mysql)
-   -rdbcs, -result-db-conn string         database connection string (env: HTTPX_DB_CONNECTION_STRING)
-   -rdbn, -result-db-name string          database name (default "httpx")
-   -rdbtb, -result-db-table string        table/collection name (default "results")
-   -rdbbs, -result-db-batch-size int      batch size for database inserts (default 100)
-   -rdbor, -result-db-omit-raw            omit raw request/response data from database
-
-CONFIGURATIONS:
-   -config string                   path to the httpx configuration file (default $HOME/.config/httpx/config.yaml)
-   -r, -resolvers string[]          list of custom resolver (file or comma separated)
-   -allow string[]                  allowed list of IP/CIDR's to process (file or comma separated)
-   -deny string[]                   denied list of IP/CIDR's to process (file or comma separated)
-   -sni, -sni-name string           custom TLS SNI name
-   -random-agent                    enable Random User-Agent to use (default true)
-   -auto-referer                    set the Referer header to the current URL
-   -H, -header string[]             custom http headers to send with request
-   -http-proxy, -proxy string       proxy (http|socks) to use (eg http://127.0.0.1:8080)
-   -unsafe                          send raw requests skipping golang normalization
-   -resume                          resume scan using resume.cfg
-   -fr, -follow-redirects           follow http redirects
-   -maxr, -max-redirects int        max number of redirects to follow per host (default 10)
-   -fhr, -follow-host-redirects     follow redirects on the same host
-   -rhsts, -respect-hsts            respect HSTS response headers for redirect requests
-   -vhost-input                     get a list of vhosts as input
-   -x string                        request methods to probe, use 'all' to probe all HTTP methods
-   -body string                     post body to include in http request
-   -s, -stream                      stream mode - start elaborating input targets without sorting
-   -sd, -skip-dedupe                disable dedupe input items (only used with stream mode)
-   -ldp, -leave-default-ports       leave default http/https ports in host header (eg. http://host:80 - https://host:443
-   -ztls                            use ztls library with autofallback to standard one for tls13
-   -no-decode                       avoid decoding body
-   -tlsi, -tls-impersonate          enable experimental client hello (ja3) tls randomization
-   -no-stdin                        Disable Stdin processing
-   -hae, -http-api-endpoint string  experimental http api endpoint
-   -sf, -secret-file string         path to secret file for authentication
-
-DEBUG:
-   -health-check, -hc        run diagnostic check up
-   -debug                    display request/response content in cli
-   -debug-req                display request content in cli
-   -debug-resp               display response content in cli
-   -version                  display httpx version
-   -stats                    display scan statistic
-   -profile-mem string       optional httpx memory profile dump file
-   -silent                   silent mode
-   -v, -verbose              verbose mode
-   -si, -stats-interval int  number of seconds to wait between showing a statistics update (default: 5)
-   -nc, -no-color            disable colors in cli output
-   -tr, -trace               trace
-
-OPTIMIZATIONS:
-   -nf, -no-fallback                  display both probed protocol (HTTPS and HTTP)
-   -nfs, -no-fallback-scheme          probe with protocol scheme specified in input
-   -maxhr, -max-host-error int        max error count per host before skipping remaining path/s (default 30)
-   -e, -exclude string[]              exclude host matching specified filter ('cdn', 'private-ips', cidr, ip, regex)
-   -retries int                       number of retries
-   -timeout int                       timeout in seconds (default 10)
-   -delay value                       duration between each http request (eg: 200ms, 1s) (default -1ns)
-   -rsts, -response-size-to-save int  max response size to save in bytes (default 512000000)
-   -rstr, -response-size-to-read int  max response size to read in bytes (default 512000000)
-
-CLOUD:
-   -auth                           configure projectdiscovery cloud (pdcp) api key (default true)
-   -ac, -auth-config string        configure projectdiscovery cloud (pdcp) api key credential file
-   -pd, -dashboard                 upload / view output in projectdiscovery cloud (pdcp) UI dashboard
-   -tid, -team-id string           upload asset results to given team id (optional)
-   -aid, -asset-id string          upload new assets to existing asset id (optional)
-   -aname, -asset-name string      assets group name to set (optional)
-   -pdu, -dashboard-upload string  upload httpx output file (jsonl) in projectdiscovery cloud (pdcp) UI dashboard
+```shell
+$ pip install 'httpx[cli]'  # The command line client is an optional dependency.
 ```
 
-# Running httpx
+Which now allows us to use HTTPX directly from the command-line...
 
-For details about running httpx, see https://docs.projectdiscovery.io/tools/httpx/running.
+<p align="center">
+  <img width="700" src="docs/img/httpx-help.png" alt='httpx --help'>
+</p>
 
-### Using `httpx` as a library
-`httpx` can be used as a library by creating an instance of the `Option` struct and populating it with the same options that would be specified via CLI. Once validated, the struct should be passed to a runner instance (to be closed at the end of the program) and the `RunEnumeration` method should be called. A minimal example of how to do it is in the [examples](examples/) folder
+Sending a request...
 
-# Notes
+<p align="center">
+  <img width="700" src="docs/img/httpx-request.png" alt='httpx http://httpbin.org/json'>
+</p>
 
-- As default, `httpx` probe with **HTTPS** scheme and fall-back to **HTTP** only if **HTTPS** is not reachable.
-- Burp Suite XML exports can be used as input with `-l burp-export.xml -im burp`
-- The `-no-fallback` flag can be used to probe and display both **HTTP** and **HTTPS** result.
-- Custom scheme for ports can be defined, for example `-ports http:443,http:80,https:8443`
-- Custom resolver supports multiple protocol (**doh|tcp|udp**) in form of `protocol:resolver:port` (e.g. `udp:127.0.0.1:53`)
-- Secret files can be used for domain-based authentication via `-sf secrets.yaml`. Supported auth types: `BasicAuth`, `BearerToken`, `Header`, `Cookie`, `Query`. Example:
-  ```yaml
-  id: example-auth
-  info:
-    name: Example Auth Config
-  static:
-    - type: Header
-      domains:
-        - api.example.com
-      headers:
-        - key: X-API-Key
-          value: secret-key-here
-    - type: BasicAuth
-      domains-regex:
-        - ".*\\.internal\\.com$"
-      username: admin
-      password: secret
-  ```
-- The following flags should be used for specific use cases instead of running them as default with other probes:
-   - `-ports`
-   - `-path`
-   - `-vhost`
-   - `-screenshot`
-   - `-csp-probe`
-   - `-tls-probe`
-   - `-favicon`
-   - `-http2`
-   - `-pipeline`
-   - `-tls-impersonate`
+## Features
 
+HTTPX builds on the well-established usability of `requests`, and gives you:
 
-# Acknowledgement
+* A broadly [requests-compatible API](https://www.python-httpx.org/compatibility/).
+* An integrated command-line client.
+* HTTP/1.1 [and HTTP/2 support](https://www.python-httpx.org/http2/).
+* Standard synchronous interface, but with [async support if you need it](https://www.python-httpx.org/async/).
+* Ability to make requests directly to [WSGI applications](https://www.python-httpx.org/advanced/transports/#wsgi-transport) or [ASGI applications](https://www.python-httpx.org/advanced/transports/#asgi-transport).
+* Strict timeouts everywhere.
+* Fully type annotated.
+* 100% test coverage.
 
-Probing feature is inspired by [@tomnomnom/httprobe](https://github.com/tomnomnom/httprobe) work ❤️
+Plus all the standard features of `requests`...
 
+* International Domains and URLs
+* Keep-Alive & Connection Pooling
+* Sessions with Cookie Persistence
+* Browser-style SSL Verification
+* Basic/Digest Authentication
+* Elegant Key/Value Cookies
+* Automatic Decompression
+* Automatic Content Decoding
+* Unicode Response Bodies
+* Multipart File Uploads
+* HTTP(S) Proxy Support
+* Connection Timeouts
+* Streaming Downloads
+* .netrc Support
+* Chunked Requests
 
---------
+## Installation
 
-<div align="center">
+Install with pip:
 
-`httpx` is made with 💙 by the [projectdiscovery](https://projectdiscovery.io) team and distributed under [MIT License](LICENSE.md).
+```shell
+$ pip install httpx
+```
 
+Or, to include the optional HTTP/2 support, use:
 
-<a href="https://discord.gg/projectdiscovery"><img src="https://raw.githubusercontent.com/projectdiscovery/nuclei-burp-plugin/main/static/join-discord.png" width="300" alt="Join Discord"></a>
+```shell
+$ pip install httpx[http2]
+```
 
-</div>
+HTTPX requires Python 3.9+.
+
+## Documentation
+
+Project documentation is available at [https://www.python-httpx.org/](https://www.python-httpx.org/).
+
+For a run-through of all the basics, head over to the [QuickStart](https://www.python-httpx.org/quickstart/).
+
+For more advanced topics, see the [Advanced Usage](https://www.python-httpx.org/advanced/) section, the [async support](https://www.python-httpx.org/async/) section, or the [HTTP/2](https://www.python-httpx.org/http2/) section.
+
+The [Developer Interface](https://www.python-httpx.org/api/) provides a comprehensive API reference.
+
+To find out about tools that integrate with HTTPX, see [Third Party Packages](https://www.python-httpx.org/third_party_packages/).
+
+## Contribute
+
+If you want to contribute with HTTPX check out the [Contributing Guide](https://www.python-httpx.org/contributing/) to learn how to start.
+
+## Dependencies
+
+The HTTPX project relies on these excellent libraries:
+
+* `httpcore` - The underlying transport implementation for `httpx`.
+  * `h11` - HTTP/1.1 support.
+* `certifi` - SSL certificates.
+* `idna` - Internationalized domain name support.
+* `sniffio` - Async library autodetection.
+
+As well as these optional installs:
+
+* `h2` - HTTP/2 support. *(Optional, with `httpx[http2]`)*
+* `socksio` - SOCKS proxy support. *(Optional, with `httpx[socks]`)*
+* `rich` - Rich terminal support. *(Optional, with `httpx[cli]`)*
+* `click` - Command line client support. *(Optional, with `httpx[cli]`)*
+* `brotli` or `brotlicffi` - Decoding for "brotli" compressed responses. *(Optional, with `httpx[brotli]`)*
+* `zstandard` - Decoding for "zstd" compressed responses. *(Optional, with `httpx[zstd]`)*
+
+A huge amount of credit is due to `requests` for the API layout that
+much of this work follows, as well as to `urllib3` for plenty of design
+inspiration around the lower-level networking details.
+
+---
+
+<p align="center"><i>HTTPX is <a href="https://github.com/encode/httpx/blob/master/LICENSE.md">BSD licensed</a> code.<br/>Designed & crafted with care.</i><br/>&mdash; 🦋 &mdash;</p>
