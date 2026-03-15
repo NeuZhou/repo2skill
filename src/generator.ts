@@ -262,6 +262,20 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
     lines.push("");
   }
 
+  // Docker info
+  if (analysis.dockerInfo) {
+    lines.push("## Docker");
+    lines.push("");
+    lines.push(`- **Base image:** \`${analysis.dockerInfo.baseImage}\``);
+    if (analysis.dockerInfo.exposedPorts.length > 0) {
+      lines.push(`- **Exposed ports:** ${analysis.dockerInfo.exposedPorts.map(p => `\`${p}\``).join(", ")}`);
+    }
+    if (analysis.dockerInfo.entrypoint) {
+      lines.push(`- **Entrypoint:** \`${analysis.dockerInfo.entrypoint}\``);
+    }
+    lines.push("");
+  }
+
   // Project Info
   lines.push("## Project Info");
   lines.push("");

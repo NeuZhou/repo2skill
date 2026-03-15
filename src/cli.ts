@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { repo2skill, repo2skillJson, repo2skillDryRun } from "./index";
 import * as path from "path";
 import * as fs from "fs";
+import { execSync } from "child_process";
 
 const program = new Command();
 
@@ -17,7 +18,8 @@ program
   .option("-j, --json", "Output analysis as JSON instead of generating files")
   .option("-d, --dry-run", "Preview what would be generated without writing files")
   .option("-s, --stats", "Show aggregate stats of generated skills in output directory")
-  .action(async (repo: string | undefined, opts: { output: string; name?: string; batch?: string; json?: boolean; dryRun?: boolean; stats?: boolean }) => {
+  .option("-p, --publish", "Publish to ClawHub after generating")
+  .action(async (repo: string | undefined, opts: { output: string; name?: string; batch?: string; json?: boolean; dryRun?: boolean; stats?: boolean; publish?: boolean }) => {
     try {
       if (opts.stats) {
         showStats(path.resolve(opts.output));
@@ -59,6 +61,9 @@ program
         console.log(`   SKILL.md: ${path.join(result.skillDir, "SKILL.md")}`);
         if (result.referencesCount > 0) {
           console.log(`   References: ${result.referencesCount} file(s)`);
+        }
+        if (opts.publish) {
+          await publishSkill(result.skillDir);
         }
       } else {
         console.error("❌ Provide a repo argument or use --batch <file>");
@@ -154,6 +159,22 @@ function showStats(outputDir: string) {
     console.log(`    ${lang.padEnd(15)} ${bar} ${count}`);
   }
   console.log("");
+}
+
+async function publishSkill(skillDir: string) {
+  console.log(`\n📦 Publishing to ClawHub...`);
+  try {
+    execSync("clawhub --version", { stdio: "ignore" });
+  } catch {
+    console.error("❌ clawhub CLI not found. Install it: npm i -g clawhub");
+    return;
+  }
+  try {
+    execSync(`clawhub publish "${skillDir}"`, { stdio: "inherit" });
+    console.log("✅ Published to ClawHub!");
+  } catch (err: any) {
+    console.error(`❌ Publish failed: ${err.message}`);
+  }
 }
 
 program.parse();

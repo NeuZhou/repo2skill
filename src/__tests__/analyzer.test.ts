@@ -21,6 +21,14 @@ describe("stripHtmlTags", () => {
   it("handles nested tags", () => {
     expect(stripHtmlTags("<div><span>text</span></div>")).toBe("text");
   });
+
+  it("handles self-closing tags", () => {
+    expect(stripHtmlTags("before<br/>after")).toBe("beforeafter");
+  });
+
+  it("handles multiple entities", () => {
+    expect(stripHtmlTags("&lt;hello&gt; &amp; &quot;world&quot;")).toBe("hello world");
+  });
 });
 
 describe("extractFirstParagraph", () => {
@@ -51,6 +59,15 @@ describe("extractFirstParagraph", () => {
 
   it("handles empty readme", () => {
     expect(extractFirstParagraph("")).toBe("");
+  });
+
+  it("handles readme with only headings", () => {
+    expect(extractFirstParagraph("# Title\n## Subtitle\n### Section")).toBe("");
+  });
+
+  it("handles readme with separator lines", () => {
+    const readme = "# Title\n\n---\n\nContent after separator.";
+    expect(extractFirstParagraph(readme)).toBe("Content after separator.");
   });
 });
 
@@ -105,5 +122,84 @@ describe("categorizeProject", () => {
 
   it("detects CLI from commands", () => {
     expect(categorizeProject(makeAnalysis({ cliCommands: [{ name: "mycli" }] }))).toBe("cli-tool");
+  });
+
+  it("detects framework", () => {
+    expect(categorizeProject(makeAnalysis({ description: "A modern UI framework" }))).toBe("framework");
+  });
+
+  it("detects tool from description", () => {
+    expect(categorizeProject(makeAnalysis({ description: "A developer toolkit for testing" }))).toBe("tool");
+  });
+
+  it("detects api framework", () => {
+    expect(categorizeProject(makeAnalysis({ description: "A blazing fast API framework" }))).toBe("server-framework");
+  });
+
+  it("detects http server", () => {
+    expect(categorizeProject(makeAnalysis({ description: "An HTTP server implementation" }))).toBe("server-framework");
+  });
+
+  it("detects library from utility keyword", () => {
+    expect(categorizeProject(makeAnalysis({ description: "A collection of utilities for strings" }))).toBe("library");
+  });
+
+  // Ruby gemspec parsing test
+  it("handles Ruby gemspec project", () => {
+    const analysis = makeAnalysis({
+      description: "A Ruby web framework",
+      language: "Ruby",
+      languages: ["Ruby"],
+      installInstructions: "gem install rails",
+    });
+    expect(categorizeProject(analysis)).toBe("server-framework");
+  });
+
+  // Java/Maven project
+  it("handles Java/Maven project", () => {
+    const analysis = makeAnalysis({
+      description: "A Java library for JSON processing",
+      language: "Java",
+      languages: ["Java"],
+      dependencies: ["com.fasterxml.jackson:jackson-core"],
+    });
+    expect(categorizeProject(analysis)).toBe("library");
+  });
+
+  // Go project
+  it("handles Go CLI project", () => {
+    const analysis = makeAnalysis({
+      description: "A Go command-line tool for file management",
+      language: "Go",
+      languages: ["Go"],
+      cliCommands: [{ name: "filetool" }],
+    });
+    expect(categorizeProject(analysis)).toBe("cli-tool");
+  });
+
+  // Monorepo
+  it("handles monorepo project", () => {
+    const analysis = makeAnalysis({
+      description: "A monorepo utility library",
+      isMonorepo: true,
+      monorepoPackages: ["core", "cli", "web"],
+    });
+    expect(categorizeProject(analysis)).toBe("library");
+  });
+
+  it("prefers server-framework over CLI when both present", () => {
+    const analysis = makeAnalysis({
+      description: "A web server with CLI utilities",
+      cliCommands: [{ name: "serve" }],
+    });
+    expect(categorizeProject(analysis)).toBe("server-framework");
+  });
+
+  it("detects fetch-based client", () => {
+    expect(categorizeProject(makeAnalysis({ description: "A fetch wrapper for browsers" }))).toBe("http-client");
+  });
+
+  it("detects request library", () => {
+    expect(categorizeProject(makeAnalysis({ description: "A request library for Python" }))).toBe("http-client");
   });
 });

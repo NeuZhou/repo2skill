@@ -34,6 +34,11 @@ export interface RepoAnalysis {
   fileTree: string;
   isMonorepo: boolean;
   monorepoPackages: string[];
+  dockerInfo?: {
+    baseImage: string;
+    exposedPorts: string[];
+    entrypoint: string;
+  };
 }
 
 export async function analyzeRepo(repoDir: string, repoName: string): Promise<RepoAnalysis> {
@@ -459,6 +464,20 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
     analysis.entryPoints.push(pkgName);
     if (!analysis.languages.includes("Swift")) analysis.languages.unshift("Swift");
     if (analysis.language === "unknown") analysis.language = "Swift";
+  }
+
+  // Dockerfile
+  const dockerfilePath = findFile(repoDir, ["Dockerfile", "dockerfile"]);
+  if (dockerfilePath) {
+    const content = fs.readFileSync(dockerfilePath, "utf-8");
+    const fromMatch = content.match(/^FROM\s+(\S+)/mi);
+    const exposeMatches = [...content.matchAll(/^EXPOSE\s+(.+)/gmi)];
+    const entrypointMatch = content.match(/^(?:ENTRYPOINT|CMD)\s+(.+)/mi);
+    analysis.dockerInfo = {
+      baseImage: fromMatch ? fromMatch[1] : "unknown",
+      exposedPorts: exposeMatches.flatMap(m => m[1].trim().split(/\s+/)),
+      entrypoint: entrypointMatch ? entrypointMatch[1].trim() : "",
+    };
   }
 
   // Fallback description from README

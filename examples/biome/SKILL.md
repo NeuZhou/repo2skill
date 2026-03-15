@@ -1,0 +1,68 @@
+---
+name: biome
+description: [biomejs]: https://biomejs.dev/ [biome-philosophy]: https://biomejs.dev/internals/philosophy/ [language-support]: https://biomejs.dev/internals/language-support/ [getting-started]: https://biomejs.dev/guides/getting-started/ WHEN: make http requests. Triggers: use biome, install biome, how to use biome, make http request.
+---
+
+# biome
+
+[biomejs]: https://biomejs.dev/ [biome-philosophy]: https://biomejs.dev/internals/philosophy/ [language-support]: https://biomejs.dev/internals/language-support/ [getting-started]: https://biomejs.dev/guides/getting-started/
+
+## When to Use
+
+- Make HTTP requests
+
+## When NOT to Use
+
+- Projects using Python or Go (different ecosystem)
+
+## Quick Start
+
+### Install
+
+```shell
+npm install --save-dev --save-exact @biomejs/biome
+```
+
+### Basic Usage
+
+```shell
+
+## Packages
+
+This is a monorepo containing the following packages:
+
+- `@biomejs`
+- `aria-data`
+- `prettier-compare`
+- `tailwindcss-config-analyzer`
+
+## Project Info
+
+- **Language:** Rust, JavaScript, TypeScript
+- **Tests:** Yes
+
+## File Structure
+
+```
+├── benchmark/
+│   ├── bench.js
+│   ├── biome.json
+│   ├── dprint.json
+│   ├── eslint.config.js
+│   ├── package.json
+│   ├── README.md
+│   ├── ts-biome.json
+│   ├── ts-eslint.config.js
+│   └── tsconfig.json
+├── crates/
+│   ├── biome_analyze/
+│   ├── biome_analyze_macros/
+│   ├── biome_aria/
+│   ├── biome_aria_metadata/
+│   ├── biome_cli/
+│   ├── biome_configuration/
+│   ├── biome_configuration_macros/
+│   ├── biome_console/
+│   ├── biome_control_flow/
+```
+```
