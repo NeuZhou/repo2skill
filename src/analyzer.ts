@@ -20,6 +20,8 @@ export interface RepoAnalysis {
   installInstructions: string;
   usageSection: string;
   usageExamples: string[];
+  configSection: string;
+  features: string[];
   apiSection: string;
   examplesSection: string;
   readmeRaw: string;
@@ -30,6 +32,8 @@ export interface RepoAnalysis {
   license: string;
   sections: Record<string, string>;
   fileTree: string;
+  isMonorepo: boolean;
+  monorepoPackages: string[];
 }
 
 export async function analyzeRepo(repoDir: string, repoName: string): Promise<RepoAnalysis> {
@@ -46,6 +50,8 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
     installInstructions: "",
     usageSection: "",
     usageExamples: [],
+    configSection: "",
+    features: [],
     apiSection: "",
     examplesSection: "",
     readmeRaw: "",
@@ -56,6 +62,8 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
     license: "",
     sections: {},
     fileTree: "",
+    isMonorepo: false,
+    monorepoPackages: [],
   };
 
   // File tree (top 2 levels)
@@ -67,22 +75,70 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
   analysis.language = analysis.languages[0] || "unknown";
   analysis.hasTests = allFiles.some(f => /test|spec|__tests__/i.test(f));
 
+  // Monorepo detection
+  const monorepoDirs = ["packages", "libs", "modules", "apps"];
+  for (const dir of monorepoDirs) {
+    const dirPath = path.join(repoDir, dir);
+    if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
+      analysis.isMonorepo = true;
+      try {
+        const pkgs = fs.readdirSync(dirPath, { withFileTypes: true })
+          .filter(e => e.isDirectory() && !e.name.startsWith("."))
+          .map(e => e.name);
+        analysis.monorepoPackages.push(...pkgs);
+      } catch {}
+    }
+  }
+  // Also detect workspaces in package.json
+  const rootPkgPath = path.join(repoDir, "package.json");
+  if (fs.existsSync(rootPkgPath)) {
+    try {
+      const rootPkg = JSON.parse(fs.readFileSync(rootPkgPath, "utf-8"));
+      if (rootPkg.workspaces) {
+        analysis.isMonorepo = true;
+      }
+    } catch {}
+  }
+  // Detect pnpm-workspace.yaml or lerna.json
+  if (fs.existsSync(path.join(repoDir, "pnpm-workspace.yaml")) || fs.existsSync(path.join(repoDir, "lerna.json"))) {
+    analysis.isMonorepo = true;
+  }
+
   // README
   const readmePath = findFile(repoDir, ["README.md", "readme.md", "Readme.md"]);
   if (readmePath) {
     analysis.readmeRaw = fs.readFileSync(readmePath, "utf-8");
     analysis.readmeFirstParagraph = extractFirstParagraph(analysis.readmeRaw);
     analysis.sections = extractSections(analysis.readmeRaw);
-    analysis.usageSection = analysis.sections["usage"] || analysis.sections["getting started"] || "";
+
+    // Usage section — try multiple alternative header names
+    const usageKeys = ["usage", "getting started", "quickstart", "quick start", "tutorial", "basic usage", "how to use", "documentation"];
+    analysis.usageSection = findFirstSection(analysis.sections, usageKeys);
+
     analysis.apiSection = analysis.sections["api"] || analysis.sections["api reference"] || "";
     analysis.examplesSection = analysis.sections["examples"] || analysis.sections["example"] || "";
-    analysis.installInstructions = analysis.sections["install"] || analysis.sections["installation"] || analysis.sections["setup"] || analysis.sections["getting started"] || "";
 
-    // Extract all code examples from usage/examples/API sections
+    // Install instructions
+    const installKeys = ["install", "installation", "setup", "getting started"];
+    analysis.installInstructions = findFirstSection(analysis.sections, installKeys);
+
+    // Configuration section
+    const configKeys = ["configuration", "config", "options", "settings"];
+    analysis.configSection = findFirstSection(analysis.sections, configKeys);
+
+    // Features extraction
+    const featuresKeys = ["features", "highlights", "why"];
+    const featuresText = findFirstSection(analysis.sections, featuresKeys);
+    if (featuresText) {
+      analysis.features = extractFeatureList(featuresText);
+    }
+
+    // Extract all code examples from usage/examples/API/config sections
     analysis.usageExamples = [
       ...extractCodeBlocks(analysis.usageSection),
       ...extractCodeBlocks(analysis.examplesSection),
       ...extractCodeBlocks(analysis.apiSection),
+      ...extractCodeBlocks(analysis.configSection),
     ];
 
     // Rich description: prefer first meaningful README paragraph over package.json one-liner
@@ -334,6 +390,30 @@ function extractCodeBlocks(text: string): string[] {
     blocks.push(match[0]);
   }
   return blocks;
+}
+
+function findFirstSection(sections: Record<string, string>, keys: string[]): string {
+  for (const key of keys) {
+    if (sections[key]) return sections[key];
+  }
+  return "";
+}
+
+function extractFeatureList(text: string): string[] {
+  const features: string[] = [];
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    // Match bullet points: -, *, or numbered lists
+    const match = trimmed.match(/^[-*•]\s+(.+)/) || trimmed.match(/^\d+[.)]\s+(.+)/);
+    if (match) {
+      // Strip markdown bold/links, keep text
+      let feature = match[1].replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").trim();
+      if (feature.length > 10 && feature.length < 200) {
+        features.push(feature);
+      }
+    }
+  }
+  return features;
 }
 
 function detectLanguages(files: string[]): string[] {

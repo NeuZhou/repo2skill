@@ -79,6 +79,10 @@ describe("categorizeProject", () => {
       license: "MIT",
       sections: {},
       fileTree: "",
+      configSection: "",
+      features: [],
+      isMonorepo: false,
+      monorepoPackages: [],
       ...overrides,
     };
   }
