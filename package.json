@@ -1,6 +1,6 @@
 {
   "name": "repo2skill",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Convert any GitHub repo into an OpenClaw skill. One command.",
   "main": "./dist/index.js",
   "bin": {
