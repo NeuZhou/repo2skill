@@ -202,6 +202,105 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
     } catch {}
   }
 
+  // Gemfile / .gemspec (Ruby)
+  const gemfilePath = path.join(repoDir, "Gemfile");
+  const gemspecs = allFiles.filter(f => f.endsWith(".gemspec"));
+  if (gemspecs.length > 0) {
+    const specPath = path.join(repoDir, gemspecs[0]);
+    const content = fs.readFileSync(specPath, "utf-8");
+    const nameMatch = content.match(/\.name\s*=\s*["']([^"']+)["']/);
+    const versionMatch = content.match(/\.version\s*=\s*["']([^"']+)["']/);
+    const descMatch = content.match(/\.summary\s*=\s*["']([^"']+)["']/) || content.match(/\.description\s*=\s*["']([^"']+)["']/);
+    if (nameMatch) {
+      const gemName = nameMatch[1];
+      if (!analysis.installInstructions) {
+        analysis.installInstructions = `gem install ${gemName}`;
+      }
+      if (!analysis.cliCommands.some(c => c.name === gemName)) {
+        // Check for executables
+        const execMatch = content.match(/\.executables\s*=\s*\[([^\]]+)\]/);
+        if (execMatch) {
+          const execs = execMatch[1].match(/["']([^"']+)["']/g);
+          if (execs) {
+            for (const e of execs) {
+              const name = e.replace(/["']/g, "");
+              analysis.cliCommands.push({ name });
+            }
+          }
+        }
+      }
+      if (descMatch) analysis.description = analysis.description || descMatch[1];
+      if (versionMatch) analysis.entryPoints.push(`${gemName}@${versionMatch[1]}`);
+    }
+    // Extract dependencies from gemspec
+    const depRegex = /\.add(?:_runtime)?_dependency\s*\(?["']([^"']+)["']/g;
+    let depMatch;
+    while ((depMatch = depRegex.exec(content)) !== null) {
+      analysis.dependencies.push(depMatch[1]);
+    }
+    if (!analysis.languages.includes("Ruby")) analysis.languages.unshift("Ruby");
+    if (analysis.language === "unknown") analysis.language = "Ruby";
+  } else if (fs.existsSync(gemfilePath)) {
+    const content = fs.readFileSync(gemfilePath, "utf-8");
+    const gems = content.match(/gem\s+["']([^"']+)["']/g);
+    if (gems) {
+      analysis.dependencies.push(...gems.map(g => g.match(/["']([^"']+)["']/)![1]));
+    }
+    if (!analysis.languages.includes("Ruby")) analysis.languages.unshift("Ruby");
+    if (analysis.language === "unknown") analysis.language = "Ruby";
+  }
+
+  // pom.xml (Maven - Java/Kotlin)
+  const pomPath = path.join(repoDir, "pom.xml");
+  if (fs.existsSync(pomPath)) {
+    const content = fs.readFileSync(pomPath, "utf-8");
+    const groupId = content.match(/<groupId>([^<]+)<\/groupId>/);
+    const artifactId = content.match(/<artifactId>([^<]+)<\/artifactId>/);
+    const version = content.match(/<version>([^<]+)<\/version>/);
+    const descMatch = content.match(/<description>([^<]+)<\/description>/);
+    if (artifactId) {
+      const name = artifactId[1];
+      if (groupId) analysis.entryPoints.push(`${groupId[1]}:${name}`);
+      if (version) analysis.entryPoints.push(`${name}@${version[1]}`);
+      if (!analysis.installInstructions) {
+        analysis.installInstructions = `<!-- Maven -->\n<dependency>\n  <groupId>${groupId?.[1] || "com.example"}</groupId>\n  <artifactId>${name}</artifactId>\n  <version>${version?.[1] || "LATEST"}</version>\n</dependency>`;
+      }
+    }
+    if (descMatch) analysis.description = analysis.description || descMatch[1];
+    // Extract dependencies
+    const depRegex = /<dependency>\s*<groupId>([^<]+)<\/groupId>\s*<artifactId>([^<]+)<\/artifactId>/g;
+    let dm;
+    while ((dm = depRegex.exec(content)) !== null) {
+      analysis.dependencies.push(`${dm[1]}:${dm[2]}`);
+    }
+    const lang = allFiles.some(f => f.endsWith(".kt") || f.endsWith(".kts")) ? "Kotlin" : "Java";
+    if (!analysis.languages.includes(lang)) analysis.languages.unshift(lang);
+    if (analysis.language === "unknown") analysis.language = lang;
+  }
+
+  // build.gradle / build.gradle.kts (Gradle - Java/Kotlin)
+  const gradleFile = findFile(repoDir, ["build.gradle.kts", "build.gradle"]);
+  if (gradleFile && !fs.existsSync(pomPath)) {
+    const content = fs.readFileSync(gradleFile, "utf-8");
+    const groupMatch = content.match(/group\s*=\s*["']([^"']+)["']/);
+    const versionMatch = content.match(/version\s*=\s*["']([^"']+)["']/);
+    if (groupMatch) analysis.entryPoints.push(groupMatch[1]);
+    if (versionMatch) analysis.entryPoints.push(`version@${versionMatch[1]}`);
+    // Extract dependencies
+    const depRegex = /(?:implementation|api|compile)\s*\(?["']([^"']+)["']/g;
+    let gm;
+    while ((gm = depRegex.exec(content)) !== null) {
+      analysis.dependencies.push(gm[1]);
+    }
+    if (!analysis.installInstructions) {
+      const artifact = groupMatch ? groupMatch[1] : analysis.name;
+      analysis.installInstructions = `// Gradle\nimplementation '${artifact}:${versionMatch?.[1] || "LATEST"}'`;
+    }
+    const lang = gradleFile.endsWith(".kts") || allFiles.some(f => f.endsWith(".kt")) ? "Kotlin" : "Java";
+    if (!analysis.languages.includes(lang)) analysis.languages.unshift(lang);
+    if (analysis.language === "unknown") analysis.language = lang;
+  }
+
   // go.mod (Go)
   const goModPath = path.join(repoDir, "go.mod");
   if (fs.existsSync(goModPath)) {
