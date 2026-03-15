@@ -1,0 +1,31 @@
+{
+  "name": "repo2skill",
+  "version": "1.0.0",
+  "description": "Convert any GitHub repo into an OpenClaw skill. One command.",
+  "main": "./dist/index.js",
+  "bin": {
+    "repo2skill": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js",
+    "dev": "ts-node src/cli.ts"
+  },
+  "author": "Kang Zhou",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NeuZhou/repo2skill"
+  },
+  "keywords": ["openclaw", "skill", "github", "cli", "agent", "ai"],
+  "dependencies": {
+    "commander": "^12.1.0",
+    "simple-git": "^3.27.0",
+    "glob": "^11.0.0",
+    "toml": "^3.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  }
+}
