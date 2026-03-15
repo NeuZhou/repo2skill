@@ -518,6 +518,68 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
     if (analysis.language === "unknown") analysis.language = "Zig";
   }
 
+  // *.cabal / stack.yaml (Haskell)
+  const cabalFiles = allFiles.filter(f => f.endsWith(".cabal"));
+  if (cabalFiles.length > 0) {
+    const cabalPath = path.join(repoDir, cabalFiles[0]);
+    const content = fs.readFileSync(cabalPath, "utf-8");
+    const nameMatch = content.match(/^name:\s*(.+)$/mi);
+    const versionMatch = content.match(/^version:\s*(.+)$/mi);
+    const descMatch = content.match(/^synopsis:\s*(.+)$/mi) || content.match(/^description:\s*(.+)$/mi);
+    const cabalName = nameMatch ? nameMatch[1].trim() : repoName;
+    if (descMatch) analysis.description = analysis.description || descMatch[1].trim();
+    if (versionMatch) analysis.entryPoints.push(`${cabalName}@${versionMatch[1].trim()}`);
+    // Extract exposed-modules
+    const modulesMatch = content.match(/^exposed-modules:\s*([\s\S]*?)(?=^\S)/mi);
+    if (modulesMatch) {
+      const modules = modulesMatch[1].trim().split(/[\s,]+/).filter(m => m && /^[A-Z]/.test(m));
+      analysis.keyApi.push(...modules.slice(0, 10));
+    }
+    // Extract build-depends
+    const depsMatch = content.match(/build-depends:\s*([\s\S]*?)(?=^\S)/mi);
+    if (depsMatch) {
+      const deps = depsMatch[1].split(",").map(d => d.trim().split(/\s+/)[0]).filter(d => d && d !== "base");
+      analysis.dependencies.push(...deps);
+    }
+    // Check for executables
+    const execMatch = content.match(/^executable\s+(\S+)/mi);
+    if (execMatch && !analysis.cliCommands.some(c => c.name === execMatch[1])) {
+      analysis.cliCommands.push({ name: execMatch[1] });
+    }
+    if (!analysis.installInstructions) {
+      const hasStack = fs.existsSync(path.join(repoDir, "stack.yaml"));
+      analysis.installInstructions = hasStack
+        ? `\`\`\`bash\nstack install ${cabalName}\n\`\`\``
+        : `\`\`\`bash\ncabal install ${cabalName}\n\`\`\``;
+    }
+    if (!analysis.languages.includes("Haskell")) analysis.languages.unshift("Haskell");
+    if (analysis.language === "unknown") analysis.language = "Haskell";
+  } else if (fs.existsSync(path.join(repoDir, "stack.yaml"))) {
+    if (!analysis.languages.includes("Haskell")) analysis.languages.unshift("Haskell");
+    if (analysis.language === "unknown") analysis.language = "Haskell";
+    if (!analysis.installInstructions) {
+      analysis.installInstructions = `\`\`\`bash\nstack build\nstack install\n\`\`\``;
+    }
+  }
+
+  // *.rockspec (Lua)
+  const rockspecFiles = allFiles.filter(f => f.endsWith(".rockspec"));
+  if (rockspecFiles.length > 0) {
+    const rockspecPath = path.join(repoDir, rockspecFiles[0]);
+    const content = fs.readFileSync(rockspecPath, "utf-8");
+    const nameMatch = content.match(/package\s*=\s*["']([^"']+)["']/);
+    const versionMatch = content.match(/version\s*=\s*["']([^"']+)["']/);
+    const descMatch = content.match(/summary\s*=\s*["']([^"']+)["']/) || content.match(/description\s*=\s*["']([^"']+)["']/);
+    const luaName = nameMatch ? nameMatch[1] : repoName;
+    if (descMatch) analysis.description = analysis.description || descMatch[1];
+    if (versionMatch) analysis.entryPoints.push(`${luaName}@${versionMatch[1]}`);
+    if (!analysis.installInstructions) {
+      analysis.installInstructions = `\`\`\`bash\nluarocks install ${luaName}\n\`\`\``;
+    }
+    if (!analysis.languages.includes("Lua")) analysis.languages.unshift("Lua");
+    if (analysis.language === "unknown") analysis.language = "Lua";
+  }
+
   // build.sbt (Scala)
   const buildSbtPath = path.join(repoDir, "build.sbt");
   if (fs.existsSync(buildSbtPath)) {

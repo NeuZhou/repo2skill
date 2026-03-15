@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { repo2skill, repo2skillJson, repo2skillDryRun } from "./index";
+import { repo2skill, repo2skillJson, repo2skillDryRun, upgradeSkill } from "./index";
 import * as path from "path";
 import * as fs from "fs";
 import { execSync } from "child_process";
@@ -10,7 +10,7 @@ const program = new Command();
 program
   .name("repo2skill")
   .description("Convert any GitHub repo into an OpenClaw skill. One command.")
-  .version("1.2.0")
+  .version("1.4.0")
   .argument("[repo]", "GitHub URL or owner/repo")
   .option("-o, --output <dir>", "Output directory", "./skills")
   .option("-n, --name <name>", "Override skill name")
@@ -19,8 +19,15 @@ program
   .option("-d, --dry-run", "Preview what would be generated without writing files")
   .option("-s, --stats", "Show aggregate stats of generated skills in output directory")
   .option("-p, --publish", "Publish to ClawHub after generating")
-  .action(async (repo: string | undefined, opts: { output: string; name?: string; batch?: string; json?: boolean; dryRun?: boolean; stats?: boolean; publish?: boolean }) => {
+  .option("-u, --upgrade <skill-dir>", "Re-analyze and regenerate an existing skill, preserving <!-- manual --> sections")
+  .action(async (repo: string | undefined, opts: { output: string; name?: string; batch?: string; json?: boolean; dryRun?: boolean; stats?: boolean; publish?: boolean; upgrade?: string }) => {
     try {
+      if (opts.upgrade) {
+        const result = await upgradeSkill(path.resolve(opts.upgrade));
+        console.log(`\n✅ Skill upgraded: ${result.skillDir}`);
+        console.log(`   Preserved ${result.manualSectionsPreserved} manual section(s)`);
+        return;
+      }
       if (opts.stats) {
         showStats(path.resolve(opts.output));
         return;
