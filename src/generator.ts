@@ -47,17 +47,19 @@ ${body}`;
 function buildDescription(analysis: RepoAnalysis, isCLI: boolean): string {
   const parts: string[] = [];
 
-  // Core description
-  const desc = analysis.description || `${analysis.name} — a ${analysis.language} project.`;
-  parts.push(desc.replace(/\n/g, " ").trim());
+  // Use rich description when available, otherwise core description
+  const desc = analysis.richDescription || analysis.description || `${analysis.name} — a ${analysis.language} project.`;
+  parts.push(desc.split("\n")[0].replace(/\n/g, " ").trim());
 
-  // When to use
-  if (isCLI) {
-    const cmds = analysis.cliCommands.map(c => c.name).join(", ");
-    parts.push(`CLI tool with commands: ${cmds}.`);
+  // When to use (inline)
+  if (analysis.whenToUse.length > 0) {
+    parts.push(`WHEN: ${analysis.whenToUse.slice(0, 4).join(", ").toLowerCase()}.`);
   }
 
-  parts.push(`Language: ${analysis.language}.`);
+  // Trigger phrases
+  if (analysis.triggerPhrases.length > 0) {
+    parts.push(`Triggers: ${analysis.triggerPhrases.slice(0, 4).join(", ")}.`);
+  }
 
   // Trim to reasonable length
   return parts.join(" ").slice(0, 500).replace(/"/g, '\\"');
@@ -68,34 +70,60 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
 
   lines.push(`# ${skillName}`);
   lines.push("");
-  if (analysis.description) {
+
+  // Rich description
+  if (analysis.richDescription) {
+    lines.push(analysis.richDescription.split("\n")[0]);
+    lines.push("");
+  } else if (analysis.description) {
     lines.push(analysis.description.split("\n")[0]);
     lines.push("");
   }
 
-  // When to Use
+  // When to Use / When NOT to Use
   lines.push("## When to Use");
   lines.push("");
-  if (isCLI) {
-    lines.push(`Use when you need to run \`${analysis.cliCommands[0]?.name || skillName}\` commands.`);
+  if (analysis.whenToUse.length > 0) {
+    for (const item of analysis.whenToUse) {
+      lines.push(`- ${item}`);
+    }
+  } else if (isCLI) {
+    lines.push(`- Run \`${analysis.cliCommands[0]?.name || skillName}\` commands`);
   } else {
-    lines.push(`Use when working with the ${skillName} ${analysis.language} library.`);
+    lines.push(`- Work with the ${skillName} ${analysis.language} library`);
   }
   lines.push("");
 
-  // Quick Start
+  if (analysis.whenNotToUse.length > 0) {
+    lines.push("## When NOT to Use");
+    lines.push("");
+    for (const item of analysis.whenNotToUse) {
+      lines.push(`- ${item}`);
+    }
+    lines.push("");
+  }
+
+  // Quick Start (installation + basic usage combined)
   lines.push("## Quick Start");
   lines.push("");
+
+  // Installation
   if (analysis.installInstructions) {
-    // Extract code blocks from install section
     const codeBlocks = extractCodeBlocks(analysis.installInstructions);
     if (codeBlocks.length > 0) {
-      lines.push(...codeBlocks.slice(0, 3).map(b => b));
+      lines.push("### Install");
+      lines.push("");
+      lines.push(...codeBlocks.slice(0, 2).map(b => b));
+      lines.push("");
     } else {
-      lines.push(trimSection(analysis.installInstructions, 15));
+      lines.push("### Install");
+      lines.push("");
+      lines.push(trimSection(analysis.installInstructions, 10));
+      lines.push("");
     }
   } else {
-    // Generate install based on language
+    lines.push("### Install");
+    lines.push("");
     if (analysis.language === "JavaScript" || analysis.language === "TypeScript") {
       lines.push("```bash");
       lines.push(`npm install ${analysis.name}`);
@@ -108,9 +136,29 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
       lines.push("```bash");
       lines.push(`cargo install ${analysis.name}`);
       lines.push("```");
+    } else if (analysis.language === "Go") {
+      lines.push("```bash");
+      lines.push(`go install ${analysis.entryPoints[0] || analysis.name}@latest`);
+      lines.push("```");
     }
+    lines.push("");
   }
-  lines.push("");
+
+  // Basic usage examples
+  if (analysis.usageExamples.length > 0) {
+    lines.push("### Basic Usage");
+    lines.push("");
+    // Show up to 3 code examples
+    for (const example of analysis.usageExamples.slice(0, 3)) {
+      lines.push(example);
+      lines.push("");
+    }
+  } else if (analysis.usageSection) {
+    lines.push("### Basic Usage");
+    lines.push("");
+    lines.push(trimSection(analysis.usageSection, 30));
+    lines.push("");
+  }
 
   // CLI Commands
   if (isCLI && analysis.cliCommands.length > 0) {
@@ -122,11 +170,11 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
     lines.push("");
   }
 
-  // Usage
-  if (analysis.usageSection) {
-    lines.push("## Usage");
+  // Examples section (if separate from usage)
+  if (analysis.examplesSection && analysis.examplesSection !== analysis.usageSection) {
+    lines.push("## Examples");
     lines.push("");
-    lines.push(trimSection(analysis.usageSection, 50));
+    lines.push(trimSection(analysis.examplesSection, 40));
     lines.push("");
   }
 
@@ -135,7 +183,6 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
     lines.push("## API");
     lines.push("");
     if (analysis.apiSection.length > 500) {
-      // Just show first part, reference the full doc
       lines.push(trimSection(analysis.apiSection, 30));
       lines.push("");
       lines.push("> Full API reference: see `references/api.md`");
@@ -151,6 +198,9 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
   lines.push(`- **Language:** ${analysis.languages.join(", ") || "Unknown"}`);
   if (analysis.license) lines.push(`- **License:** ${analysis.license}`);
   if (analysis.hasTests) lines.push("- **Tests:** Yes");
+  if (analysis.dependencies.length > 0) {
+    lines.push(`- **Key dependencies:** ${analysis.dependencies.slice(0, 8).join(", ")}`);
+  }
   lines.push("");
 
   // File Structure
@@ -166,6 +216,7 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
 }
 
 function extractCodeBlocks(text: string): string[] {
+  if (!text) return [];
   const blocks: string[] = [];
   const regex = /```[\s\S]*?```/g;
   let match;
