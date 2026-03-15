@@ -217,6 +217,24 @@ rg -t py "import" src/
 | 📋 **Batch conversion** | One at a time | Process dozens at once |
 | 🔄 **Consistency** | Varies by author | Uniform format |
 
+## 🐾 Use as OpenClaw Skill
+
+repo2skill is itself available as an OpenClaw skill! Install it so your agent can convert repos to skills on demand:
+
+```bash
+# Copy the skill directory into your workspace
+cp -r skill/ ~/.openclaw/workspace/skills/repo2skill/
+
+# Or install from ClawHub
+clawhub install repo2skill
+```
+
+Once installed, just ask your agent:
+> "Convert sindresorhus/got into a skill"
+> "Create an OpenClaw skill from astral-sh/ruff"
+
+The agent will run `repo2skill` and drop the generated skill into your workspace.
+
 ## 🤝 Contributing
 
 Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
