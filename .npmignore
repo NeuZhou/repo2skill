@@ -1,0 +1,10 @@
+src/
+examples/
+tsconfig.json
+.github/
+*.test.ts
+*.test.js
+*.spec.ts
+*.spec.js
+__tests__/
+vitest.config.*
