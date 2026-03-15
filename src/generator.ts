@@ -145,6 +145,21 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
       lines.push(`// In Package.swift dependencies:`);
       lines.push(`.package(url: "https://github.com/${analysis.name}", from: "1.0.0")`);
       lines.push("```");
+    } else if (analysis.language === "C" || analysis.language === "C++") {
+      lines.push("```bash");
+      lines.push("mkdir build && cd build");
+      lines.push("cmake ..");
+      lines.push("make");
+      lines.push("```");
+    } else if (analysis.language === "PHP") {
+      lines.push("```bash");
+      lines.push(`composer require ${analysis.name}`);
+      lines.push("```");
+    } else if (analysis.language === "Elixir") {
+      lines.push("```elixir");
+      lines.push(`# In mix.exs deps:`);
+      lines.push(`{:${analysis.name}, "~> 0.1.0"}`);
+      lines.push("```");
     }
     lines.push("");
   }
