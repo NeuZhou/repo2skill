@@ -9,15 +9,20 @@ const program = new Command();
 program
   .name("repo2skill")
   .description("Convert any GitHub repo into an OpenClaw skill. One command.")
-  .version("1.0.0")
+  .version("1.2.0")
   .argument("[repo]", "GitHub URL or owner/repo")
   .option("-o, --output <dir>", "Output directory", "./skills")
   .option("-n, --name <name>", "Override skill name")
   .option("-b, --batch <file>", "Batch mode: file with one repo URL per line")
   .option("-j, --json", "Output analysis as JSON instead of generating files")
   .option("-d, --dry-run", "Preview what would be generated without writing files")
-  .action(async (repo: string | undefined, opts: { output: string; name?: string; batch?: string; json?: boolean; dryRun?: boolean }) => {
+  .option("-s, --stats", "Show aggregate stats of generated skills in output directory")
+  .action(async (repo: string | undefined, opts: { output: string; name?: string; batch?: string; json?: boolean; dryRun?: boolean; stats?: boolean }) => {
     try {
+      if (opts.stats) {
+        showStats(path.resolve(opts.output));
+        return;
+      }
       if (opts.json && repo) {
         const result = await repo2skillJson(repo);
         console.log(JSON.stringify(result, null, 2));
@@ -99,6 +104,56 @@ async function runBatch(batchFile: string, outputDir: string) {
   const success = results.filter(r => r.status === "✅").length;
   const failed = results.filter(r => r.status === "❌").length;
   console.log(`\n📊 Batch complete: ${success} succeeded, ${failed} failed out of ${lines.length}`);
+}
+
+function showStats(outputDir: string) {
+  if (!fs.existsSync(outputDir)) {
+    console.error(`❌ Output directory not found: ${outputDir}`);
+    process.exit(1);
+  }
+
+  const entries = fs.readdirSync(outputDir, { withFileTypes: true })
+    .filter(e => e.isDirectory());
+
+  let totalSkills = 0;
+  let totalSize = 0;
+  const languages: Record<string, number> = {};
+
+  for (const entry of entries) {
+    const skillMdPath = path.join(outputDir, entry.name, "SKILL.md");
+    if (!fs.existsSync(skillMdPath)) continue;
+
+    totalSkills++;
+    const content = fs.readFileSync(skillMdPath, "utf-8");
+    totalSize += content.length;
+
+    // Extract language from "**Language:** ..." line
+    const langMatch = content.match(/\*\*Language:\*\*\s*(.+)/);
+    if (langMatch) {
+      const langs = langMatch[1].split(",").map(l => l.trim());
+      for (const lang of langs) {
+        if (lang) languages[lang] = (languages[lang] || 0) + 1;
+      }
+    }
+  }
+
+  if (totalSkills === 0) {
+    console.log(`\n📊 No skills found in ${outputDir}\n`);
+    return;
+  }
+
+  const avgSize = Math.round(totalSize / totalSkills);
+  const sortedLangs = Object.entries(languages).sort((a, b) => b[1] - a[1]);
+
+  console.log(`\n📊 Skill Stats — ${outputDir}\n`);
+  console.log(`  Total skills:     ${totalSkills}`);
+  console.log(`  Avg SKILL.md:     ${(avgSize / 1024).toFixed(1)} KB (${avgSize} bytes)`);
+  console.log(`\n  Languages:`);
+  for (const [lang, count] of sortedLangs) {
+    const bar = "█".repeat(Math.min(count, 20));
+    console.log(`    ${lang.padEnd(15)} ${bar} ${count}`);
+  }
+  console.log("");
 }
 
 program.parse();
