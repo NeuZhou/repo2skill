@@ -27,6 +27,22 @@ Bun supports Linux (x64 & arm64), macOS (x64 & Apple Silicon), and Windows (x64 
 
 ```sh
 
+## Packages
+
+This is a monorepo containing the following packages:
+
+- `@types`
+- `bun-build-mdx-rs`
+- `bun-debug-adapter-protocol`
+- `bun-error`
+- `bun-inspector-frontend`
+- `bun-inspector-protocol`
+- `bun-lambda`
+- `bun-native-bundler-plugin-api`
+- `bun-native-plugin-rs`
+- `bun-plugin-svelte`
+- ... and 7 more
+
 ## Project Info
 
 - **Language:** JavaScript, TypeScript, Zig, C++, C, Rust, Python, Ruby

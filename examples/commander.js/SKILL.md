@@ -35,6 +35,28 @@ program
 Usage: my-command [global options] command
 ```
 
+```js
+program
+  .option('-p, --port <number>', 'server port number')
+  .option('--trace', 'add extra debugging output')
+  .option('--ws, --workspace <name>', 'use a custom workspace')
+```
+
+## Configuration
+
+```js
+program
+  .option('-p, --port <number>', 'server port number')
+  .option('--trace', 'add extra debugging output')
+  .option('--ws, --workspace <name>', 'use a custom workspace')
+```
+```sh
+serve -p 80
+serve -p80
+serve --port 80
+serve --port=80
+```
+
 ## Project Info
 
 - **Language:** JavaScript, TypeScript

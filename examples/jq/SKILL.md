@@ -21,6 +21,11 @@ description: `jq` is a lightweight and flexible command-line JSON processor akin
 ### Install
 
 
+### Basic Usage
+
+- **Official Documentation**: [jqlang.org](https://jqlang.org)
+- **Try jq Online**: [play.jqlang.org](https://play.jqlang.org)
+
 ## Project Info
 
 - **Language:** C, Python, C++, JavaScript

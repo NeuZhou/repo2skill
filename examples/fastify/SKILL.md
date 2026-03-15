@@ -27,6 +27,21 @@ npm i fastify
 
 ### Basic Usage
 
+```sh
+mkdir my-app
+cd my-app
+```
+
+```sh
+npm init fastify
+```
+
+```sh
+npm i
+```
+
+## Examples
+
 ```js
 // Require the framework and instantiate it
 
@@ -53,6 +68,8 @@ fastify.listen({ port: 3000 }, (err, address) => {
 })
 ```
 
+With async-await:
+
 ```js
 // ESM
 import Fastify from 'fastify'
@@ -65,35 +82,6 @@ const fastify = require('fastify')({
   logger: true
 })
 
-fastify.get('/', async (request, reply) => {
-  reply.type('application/json').code(200)
-  return { hello: 'world' }
-})
-
-fastify.listen({ port: 3000 }, (err, address) => {
-  if (err) throw err
-  // Server is now listening on ${address}
-})
-```
-
-## Examples
-
-With async-await:
-
-Do you want to know more? Head to the <a
-href="./docs/Guides/Getting-Started.md"><code><b>Getting Started</b></code></a>.
-If you learn best by reading code, explore the official [demo](https://github.com/fastify/demo).
-
-> ## Note
-> `.listen` binds to the local host, `localhost`, interface by default
-> (`127.0.0.1` or `::1`, depending on the operating system configuration). If
-> you are running Fastify in a container (Docker,
-> [GCP](https://cloud.google.com/), etc.), you may need to bind to `0.0.0.0`. Be
-> careful when listening on all interfaces; it comes with inherent
-> [security
-> risks](https://web.archive.org/web/20170711105010/https://snyk.io/blog/mongodb-hack-and-secure-defaults/).
-> See [the documentation](./docs/Reference/Server.md#listen) for more
-> information.
 
 ## Project Info
 
@@ -125,4 +113,5 @@ If you learn best by reading code, explore the official [demo](https://github.co
 │   ├── route-prefix.js
 │   ├── shared-schema.js
 │   ├── simple-stream.js
+```
 ```

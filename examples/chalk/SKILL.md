@@ -77,6 +77,14 @@ console.log(error('Error!'));
 console.log(warning('Warning!'));
 ```
 
+## Key Features
+
+- Expressive API
+- Highly performant
+- No dependencies
+- Ability to nest styles
+- 256/Truecolor color support
+
 ## Project Info
 
 - **Language:** JavaScript, TypeScript

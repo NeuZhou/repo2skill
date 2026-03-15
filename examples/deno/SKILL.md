@@ -24,6 +24,22 @@ curl -fsSL https://deno.land/install.sh | sh
 irm https://deno.land/install.ps1 | iex
 ```
 
+## Packages
+
+This is a monorepo containing the following packages:
+
+- `cache_dir`
+- `config`
+- `core`
+- `core_testing`
+- `crypto`
+- `dcore`
+- `dotenv`
+- `eszip`
+- `inspector_server`
+- `lockfile`
+- ... and 12 more
+
 ## Project Info
 
 - **Language:** TypeScript, JavaScript, Rust, C, C++, C#

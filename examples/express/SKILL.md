@@ -26,28 +26,42 @@ npm install express
 ### Basic Usage
 
 ```bash
-git clone https://github.com/expressjs/express.git --depth 1 && cd express
+npm install -g express-generator@4
+```
+
+```bash
+express /tmp/foo && cd /tmp/foo
 ```
 
 ```bash
 npm install
 ```
 
-```bash
-node examples/content-negotiation
-```
+## Key Features
+
+- Robust routing
+- Focus on high performance
+- Super-high test coverage
+- HTTP helpers (redirection, caching, etc)
+- View system supporting 14+ template engines
 
 ## Examples
 
 To view the examples, clone the Express repository:
 
-
+```bash
+git clone https://github.com/expressjs/express.git --depth 1 && cd express
+```
 
   Then install the dependencies:
 
 
 
   Then run whichever example you want:
+
+```bash
+node examples/content-negotiation
+```
 
 ## Project Info
 

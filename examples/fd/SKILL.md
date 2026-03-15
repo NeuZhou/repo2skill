@@ -25,9 +25,23 @@ description: [[中文](https://github.com/cha0ran/fd-zh)] [[한국어](https://g
 cargo install --path .
 ```
 
+### Basic Usage
+
+First, to get an overview of all available command line options, you can either run
+[`fd -h`](#command-line-options) for a concise help message or `fd --help` for a more detailed
+version.
+
 ## CLI Commands
 
 - `fd-find`
+
+## Key Features
+
+- Intuitive syntax: `fd PATTERN` instead of `find -iname '*PATTERN*'`.
+- Regular expression (default) and glob-based patterns.
+- Very fast due to parallelized directory traversal.
+- Uses colors to highlight different file types (same as `ls`).
+- Supports parallel command execution
 
 ## Project Info
 

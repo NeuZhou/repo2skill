@@ -1,0 +1,15 @@
+oven-sh/bun
+chalk/chalk
+tj/commander.js
+denoland/deno
+expressjs/express
+fastapi/fastapi
+fastify/fastify
+sharkdp/fd
+pallets/flask
+junegunn/fzf
+sindresorhus/got
+jqlang/jq
+psf/requests
+BurntSushi/ripgrep
+astral-sh/ruff
