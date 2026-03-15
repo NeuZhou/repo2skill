@@ -331,6 +331,95 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
     if (analysis.language === "unknown") analysis.language = "Go";
   }
 
+  // CMakeLists.txt / Makefile (C/C++)
+  const cmakePath = path.join(repoDir, "CMakeLists.txt");
+  const makefilePath = findFile(repoDir, ["Makefile", "makefile", "GNUmakefile"]);
+  if (fs.existsSync(cmakePath)) {
+    const content = fs.readFileSync(cmakePath, "utf-8");
+    const projectMatch = content.match(/project\s*\(\s*(\w+)/i);
+    const projName = projectMatch ? projectMatch[1] : repoName;
+    analysis.description = analysis.description || `${projName} — a C/C++ project built with CMake`;
+    // Detect library vs executable
+    const hasLib = /add_library\s*\(/i.test(content);
+    const hasExe = /add_executable\s*\(/i.test(content);
+    if (hasExe) {
+      const exeMatch = content.match(/add_executable\s*\(\s*(\w+)/i);
+      const exeName = exeMatch ? exeMatch[1] : projName;
+      if (!analysis.cliCommands.some(c => c.name === exeName)) {
+        analysis.cliCommands.push({ name: exeName });
+      }
+    }
+    if (!analysis.installInstructions) {
+      analysis.installInstructions = `\`\`\`bash\nmkdir build && cd build\ncmake ..\nmake\n${hasExe ? "# Binary available in build/" : "make install"}\n\`\`\``;
+    }
+    analysis.entryPoints.push(projName);
+    const lang = allFiles.some(f => /\.(cpp|cc|cxx|hpp)$/i.test(f)) ? "C++" : "C";
+    if (!analysis.languages.includes(lang)) analysis.languages.unshift(lang);
+    if (analysis.language === "unknown") analysis.language = lang;
+  } else if (makefilePath) {
+    if (!analysis.installInstructions) {
+      analysis.installInstructions = `\`\`\`bash\nmake\nmake install\n\`\`\``;
+    }
+    const lang = allFiles.some(f => /\.(cpp|cc|cxx|hpp)$/i.test(f)) ? "C++" : "C";
+    if (!analysis.languages.includes(lang)) analysis.languages.unshift(lang);
+    if (analysis.language === "unknown") analysis.language = lang;
+  }
+
+  // composer.json (PHP)
+  const composerPath = path.join(repoDir, "composer.json");
+  if (fs.existsSync(composerPath)) {
+    try {
+      const composer = JSON.parse(fs.readFileSync(composerPath, "utf-8"));
+      analysis.description = analysis.description || composer.description || "";
+      const composerName = composer.name || repoName;
+      if (composer.bin) {
+        const bins = Array.isArray(composer.bin) ? composer.bin : [composer.bin];
+        for (const b of bins) {
+          const binName = path.basename(b);
+          if (!analysis.cliCommands.some(c => c.name === binName)) {
+            analysis.cliCommands.push({ name: binName });
+          }
+        }
+      }
+      if (composer.require) {
+        analysis.dependencies.push(...Object.keys(composer.require).filter(d => d !== "php" && !d.startsWith("ext-")));
+      }
+      if (!analysis.installInstructions) {
+        analysis.installInstructions = `\`\`\`bash\ncomposer require ${composerName}\n\`\`\``;
+      }
+      analysis.license = composer.license || "";
+      analysis.entryPoints.push(composerName);
+    } catch {}
+    if (!analysis.languages.includes("PHP")) analysis.languages.unshift("PHP");
+    if (analysis.language === "unknown") analysis.language = "PHP";
+  }
+
+  // mix.exs (Elixir)
+  const mixPath = path.join(repoDir, "mix.exs");
+  if (fs.existsSync(mixPath)) {
+    const content = fs.readFileSync(mixPath, "utf-8");
+    const appMatch = content.match(/app:\s*:(\w+)/);
+    const versionMatch = content.match(/version:\s*"([^"]+)"/);
+    const descMatch = content.match(/description:\s*"([^"]+)"/);
+    const appName = appMatch ? appMatch[1] : repoName;
+    analysis.description = analysis.description || (descMatch ? descMatch[1] : `${appName} — an Elixir project`);
+    if (versionMatch) analysis.entryPoints.push(`${appName}@${versionMatch[1]}`);
+    // Extract deps
+    const depsBlock = content.match(/defp?\s+deps\b[\s\S]*?\[([^\]]*)\]/);
+    if (depsBlock) {
+      const depNames = depsBlock[1].match(/:\w+/g);
+      if (depNames) {
+        analysis.dependencies.push(...depNames.map(d => d.slice(1)));
+      }
+    }
+    if (!analysis.installInstructions) {
+      analysis.installInstructions = `\`\`\`elixir\n# In mix.exs deps:\n{:${appName}, "~> ${versionMatch?.[1] || "0.1.0"}"}\n\`\`\`\n\n\`\`\`bash\nmix deps.get\n\`\`\``;
+    }
+    analysis.entryPoints.push(appName);
+    if (!analysis.languages.includes("Elixir")) analysis.languages.unshift("Elixir");
+    if (analysis.language === "unknown") analysis.language = "Elixir";
+  }
+
   // Package.swift (Swift)
   const packageSwiftPath = path.join(repoDir, "Package.swift");
   if (fs.existsSync(packageSwiftPath)) {
