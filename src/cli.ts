@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { repo2skill, repo2skillJson, repo2skillDryRun, upgradeSkill } from "./index";
+import { repo2skill, repo2skillJson, repo2skillDryRun, upgradeSkill, repo2skillLocal } from "./index";
 import * as path from "path";
 import * as fs from "fs";
 import { execSync } from "child_process";
@@ -10,7 +10,7 @@ const program = new Command();
 program
   .name("repo2skill")
   .description("Convert any GitHub repo into an OpenClaw skill. One command.")
-  .version("1.4.0")
+  .version("1.5.0")
   .argument("[repo]", "GitHub URL or owner/repo")
   .option("-o, --output <dir>", "Output directory", "./skills")
   .option("-n, --name <name>", "Override skill name")
@@ -20,7 +20,9 @@ program
   .option("-s, --stats", "Show aggregate stats of generated skills in output directory")
   .option("-p, --publish", "Publish to ClawHub after generating")
   .option("-u, --upgrade <skill-dir>", "Re-analyze and regenerate an existing skill, preserving <!-- manual --> sections")
-  .action(async (repo: string | undefined, opts: { output: string; name?: string; batch?: string; json?: boolean; dryRun?: boolean; stats?: boolean; publish?: boolean; upgrade?: string }) => {
+  .option("-l, --local <path>", "Analyze a local repo without cloning")
+  .option("--min-quality <score>", "Skip skills below this quality score (1-5)", parseInt)
+  .action(async (repo: string | undefined, opts: { output: string; name?: string; batch?: string; json?: boolean; dryRun?: boolean; stats?: boolean; publish?: boolean; upgrade?: string; local?: string; minQuality?: number }) => {
     try {
       if (opts.upgrade) {
         const result = await upgradeSkill(path.resolve(opts.upgrade));
@@ -30,6 +32,15 @@ program
       }
       if (opts.stats) {
         showStats(path.resolve(opts.output));
+        return;
+      }
+      if (opts.local) {
+        const result = await repo2skillLocal(opts.local, {
+          outputDir: path.resolve(opts.output),
+          skillName: opts.name,
+        });
+        printResult(result, opts.minQuality);
+        if (opts.publish && result.skillDir) await publishSkill(result.skillDir);
         return;
       }
       if (opts.json && repo) {
@@ -56,24 +67,16 @@ program
         return;
       }
       if (opts.batch) {
-        // Batch mode
-        await runBatch(opts.batch, opts.output);
+        await runBatch(opts.batch, opts.output, opts.minQuality);
       } else if (repo) {
-        // Single repo mode
         const result = await repo2skill(repo, {
           outputDir: path.resolve(opts.output),
           skillName: opts.name,
         });
-        console.log(`\n✅ Skill generated: ${result.skillDir}`);
-        console.log(`   SKILL.md: ${path.join(result.skillDir, "SKILL.md")}`);
-        if (result.referencesCount > 0) {
-          console.log(`   References: ${result.referencesCount} file(s)`);
-        }
-        if (opts.publish) {
-          await publishSkill(result.skillDir);
-        }
+        printResult(result, opts.minQuality);
+        if (opts.publish && result.skillDir) await publishSkill(result.skillDir);
       } else {
-        console.error("❌ Provide a repo argument or use --batch <file>");
+        console.error("❌ Provide a repo argument or use --batch <file> or --local <path>");
         process.exit(1);
       }
     } catch (err: any) {
@@ -82,7 +85,22 @@ program
     }
   });
 
-async function runBatch(batchFile: string, outputDir: string) {
+function printResult(result: { skillDir: string; referencesCount: number; quality?: { score: number; details: Record<string, boolean> } }, minQuality?: number) {
+  console.log(`\n✅ Skill generated: ${result.skillDir}`);
+  console.log(`   SKILL.md: ${path.join(result.skillDir, "SKILL.md")}`);
+  if (result.referencesCount > 0) {
+    console.log(`   References: ${result.referencesCount} file(s)`);
+  }
+  if (result.quality) {
+    console.log(`   ⭐ Skill quality: ${result.quality.score}/5`);
+    if (minQuality && result.quality.score < minQuality) {
+      console.log(`   ⚠️  Below minimum quality (${minQuality}). Removing...`);
+      fs.rmSync(result.skillDir, { recursive: true, force: true });
+    }
+  }
+}
+
+async function runBatch(batchFile: string, outputDir: string, minQuality?: number) {
   const filePath = path.resolve(batchFile);
   if (!fs.existsSync(filePath)) {
     throw new Error(`Batch file not found: ${filePath}`);
@@ -105,7 +123,13 @@ async function runBatch(batchFile: string, outputDir: string) {
         outputDir: path.resolve(outputDir),
       });
       results.push({ repo, status: "✅", dir: result.skillDir });
-      console.log(`  ✅ → ${result.skillDir}\n`);
+      const qStr = result.quality ? ` (⭐ ${result.quality.score}/5)` : "";
+      console.log(`  ✅ → ${result.skillDir}${qStr}\n`);
+      if (minQuality && result.quality && result.quality.score < minQuality) {
+        console.log(`  ⚠️  Below min quality (${minQuality}). Removing.\n`);
+        fs.rmSync(result.skillDir, { recursive: true, force: true });
+        results[results.length - 1].status = "⚠️";
+      }
     } catch (err: any) {
       results.push({ repo, status: "❌" });
       console.log(`  ❌ ${err.message}\n`);

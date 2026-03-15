@@ -3,6 +3,29 @@ import * as fs from "fs";
 import { RepoAnalysis } from "./analyzer";
 import { Repo2SkillResult } from "./index";
 
+export interface SkillQuality {
+  score: number;
+  details: {
+    hasDescription: boolean;
+    hasUsageExamples: boolean;
+    hasInstallInstructions: boolean;
+    hasWhenToUse: boolean;
+    hasKeyApiOrFeatures: boolean;
+  };
+}
+
+export function scoreSkillQuality(analysis: RepoAnalysis): SkillQuality {
+  const details = {
+    hasDescription: !!(analysis.richDescription || analysis.description),
+    hasUsageExamples: analysis.usageExamples.length > 0 || !!analysis.usageSection,
+    hasInstallInstructions: !!analysis.installInstructions,
+    hasWhenToUse: analysis.whenToUse.length > 0 || analysis.whenNotToUse.length > 0,
+    hasKeyApiOrFeatures: analysis.keyApi.length > 0 || analysis.features.length > 0,
+  };
+  const score = Object.values(details).filter(Boolean).length;
+  return { score, details };
+}
+
 export function generateSkill(
   analysis: RepoAnalysis,
   skillDir: string,
@@ -67,8 +90,9 @@ function buildDescription(analysis: RepoAnalysis, isCLI: boolean): string {
     parts.push(`Triggers: ${analysis.triggerPhrases.slice(0, 4).join(", ")}.`);
   }
 
-  // Trim to reasonable length
-  return parts.join(" ").slice(0, 500).replace(/"/g, '\\"');
+  // Truncate frontmatter description to 200 chars for conciseness
+  const full = parts.join(" ").replace(/"/g, '\\"');
+  return full.slice(0, 200);
 }
 
 function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): string {

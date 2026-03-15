@@ -4,7 +4,7 @@ import * as os from "os";
 import simpleGit from "simple-git";
 import { glob } from "glob";
 import { analyzeRepo, RepoAnalysis, categorizeProject } from "./analyzer";
-import { generateSkill } from "./generator";
+import { generateSkill, scoreSkillQuality, SkillQuality } from "./generator";
 
 export interface Repo2SkillOptions {
   outputDir: string;
@@ -14,6 +14,7 @@ export interface Repo2SkillOptions {
 export interface Repo2SkillResult {
   skillDir: string;
   referencesCount: number;
+  quality?: SkillQuality;
 }
 
 function parseRepoArg(repo: string): { url: string; name: string } {
@@ -53,11 +54,41 @@ export async function repo2skill(
     const skillDir = path.join(options.outputDir, skillName);
     const result = generateSkill(analysis, skillDir, skillName, url);
 
+    // Quality scoring
+    const quality = scoreSkillQuality(analysis);
+    result.quality = quality;
+
     return result;
   } finally {
     // Cleanup
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
+}
+
+/**
+ * Analyze a local directory without cloning.
+ */
+export async function repo2skillLocal(
+  localPath: string,
+  options: Repo2SkillOptions
+): Promise<Repo2SkillResult> {
+  const resolvedPath = path.resolve(localPath);
+  if (!fs.existsSync(resolvedPath)) {
+    throw new Error(`Local path not found: ${resolvedPath}`);
+  }
+  const repoName = options.skillName || path.basename(resolvedPath);
+
+  console.log(`🔍 Analyzing local repository at ${resolvedPath}...`);
+  const analysis = await analyzeRepo(resolvedPath, repoName);
+
+  console.log(`⚙️  Generating skill...`);
+  const skillDir = path.join(options.outputDir, repoName);
+  const result = generateSkill(analysis, skillDir, repoName);
+
+  const quality = scoreSkillQuality(analysis);
+  result.quality = quality;
+
+  return result;
 }
 
 export async function repo2skillJson(repo: string): Promise<RepoAnalysis> {

@@ -155,17 +155,21 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
   // package.json (Node.js)
   const pkgPath = path.join(repoDir, "package.json");
   if (fs.existsSync(pkgPath)) {
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-    analysis.description = analysis.description || pkg.description || "";
-    if (pkg.bin) {
-      const bins = typeof pkg.bin === "string" ? { [pkg.name || repoName]: pkg.bin } : pkg.bin;
-      for (const [name] of Object.entries(bins)) {
-        analysis.cliCommands.push({ name });
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+      analysis.description = analysis.description || pkg.description || "";
+      if (pkg.bin) {
+        const bins = typeof pkg.bin === "string" ? { [pkg.name || repoName]: pkg.bin } : pkg.bin;
+        for (const [name] of Object.entries(bins)) {
+          analysis.cliCommands.push({ name });
+        }
       }
+      if (pkg.dependencies) analysis.dependencies = Object.keys(pkg.dependencies);
+      if (pkg.main) analysis.entryPoints.push(pkg.main);
+      analysis.license = pkg.license || "";
+    } catch (e: any) {
+      console.warn(`⚠️  Could not parse package.json: ${e.message}`);
     }
-    if (pkg.dependencies) analysis.dependencies = Object.keys(pkg.dependencies);
-    if (pkg.main) analysis.entryPoints.push(pkg.main);
-    analysis.license = pkg.license || "";
   }
 
   // pyproject.toml (Python)
@@ -605,7 +609,12 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
   }
 
   // Key API extraction
-  analysis.keyApi = extractKeyApi(repoDir, analysis, allFiles);
+  try {
+    analysis.keyApi = extractKeyApi(repoDir, analysis, allFiles);
+  } catch (e: any) {
+    console.warn(`⚠️  Could not extract key API: ${e.message}`);
+    analysis.keyApi = [];
+  }
 
   // Dockerfile
   const dockerfilePath = findFile(repoDir, ["Dockerfile", "dockerfile"]);
