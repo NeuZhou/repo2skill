@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { repo2skill } from "./index";
+import { repo2skill, repo2skillJson } from "./index";
 import * as path from "path";
 import * as fs from "fs";
 
@@ -14,8 +14,14 @@ program
   .option("-o, --output <dir>", "Output directory", "./skills")
   .option("-n, --name <name>", "Override skill name")
   .option("-b, --batch <file>", "Batch mode: file with one repo URL per line")
-  .action(async (repo: string | undefined, opts: { output: string; name?: string; batch?: string }) => {
+  .option("-j, --json", "Output analysis as JSON instead of generating files")
+  .action(async (repo: string | undefined, opts: { output: string; name?: string; batch?: string; json?: boolean }) => {
     try {
+      if (opts.json && repo) {
+        const result = await repo2skillJson(repo);
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
       if (opts.batch) {
         // Batch mode
         await runBatch(opts.batch, opts.output);

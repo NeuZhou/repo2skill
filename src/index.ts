@@ -59,3 +59,18 @@ export async function repo2skill(
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 }
+
+export async function repo2skillJson(repo: string): Promise<RepoAnalysis> {
+  const { url, name: repoName } = parseRepoArg(repo);
+
+  const tmpDir = path.join(os.tmpdir(), `repo2skill-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  const git = simpleGit();
+  await git.clone(url, tmpDir, ["--depth", "1"]);
+
+  try {
+    const analysis = await analyzeRepo(tmpDir, repoName);
+    return analysis;
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
