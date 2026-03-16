@@ -1,14 +1,16 @@
 # Contributing to repo2skill
 
-Thanks for your interest in contributing! 🎉
+Thanks for your interest! Here's how to contribute.
 
 ## Getting Started
 
-1. Fork the repo
-2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/repo2skill.git`
-3. Install dependencies: `npm install`
-4. Build: `npm run build`
-5. Test locally: `node dist/cli.js sindresorhus/got`
+```bash
+git clone https://github.com/NeuZhou/repo2skill.git
+cd repo2skill
+npm install
+npm run build
+npm test
+```
 
 ## Development
 
@@ -16,46 +18,35 @@ Thanks for your interest in contributing! 🎉
 # Build
 npm run build
 
-# Run in development
-npm run dev -- sindresorhus/got
+# Run tests
+npm test
 
-# Test with a local repo
-node dist/cli.js /path/to/local/repo
+# Dev mode
+npm run dev -- facebook/react
 ```
 
-## What to Contribute
+## Adding Language Support
 
-- **New language support** — add manifest parsing in `src/analyzer.ts` (e.g., `Gemfile` for Ruby, `pom.xml` for Java)
-- **Better heuristics** — improve description extraction, trigger phrase generation, or "when to use" inference
-- **Bug fixes** — if a repo produces bad output, file an issue with the repo URL
-- **Tests** — we need them! Any test coverage is welcome
-- **Documentation** — improve README, add examples
+Language configs live in `src/languages.ts`. Each language definition includes:
 
-## Commit Style
+- Package file patterns (e.g., `package.json`, `Cargo.toml`)
+- Entry point patterns
+- Install command templates
+- Framework detection rules
 
-We use [Conventional Commits](https://www.conventionalcommits.org/):
+## Pull Request Process
 
-- `feat:` new features
-- `fix:` bug fixes
-- `docs:` documentation changes
-- `refactor:` code changes that neither fix bugs nor add features
-- `chore:` maintenance tasks
-
-## Pull Requests
-
-1. Create a feature branch: `git checkout -b feat/my-feature`
-2. Make your changes
-3. Build and test: `npm run build`
-4. Commit with a descriptive message
-5. Push and open a PR
+1. Fork the repo and create a feature branch: `git checkout -b feat/my-feature`
+2. Write tests for new functionality (we have 100+!)
+3. Ensure all tests pass: `npm test`
+4. Submit a PR with a clear description
 
 ## Code Style
 
 - TypeScript strict mode
-- Prefer explicit types over `any`
-- Keep functions focused and small
-- Comment non-obvious logic
+- Use descriptive commit messages: `feat:`, `fix:`, `test:`, `docs:`
+- New features need tests
 
-## Questions?
+## License
 
-Open an issue — we're happy to help!
+By contributing, you agree that your contributions will be licensed under MIT.
