@@ -16,236 +16,334 @@
 </p>
 
 <p align="center">
-  <a href="#-quick-start">Quick Start</a> •
-  <a href="#-features">Features</a> •
-  <a href="docs/cli-reference.md">CLI Reference</a> •
-  <a href="docs/templates.md">Templates</a> •
-  <a href="docs/configuration.md">Configuration</a>
+  <a href="#-quick-start">Quick Start</a> ·
+  <a href="#-features">Features</a> ·
+  <a href="#-supported-languages">Languages</a> ·
+  <a href="#-monorepo-support">Monorepo</a> ·
+  <a href="#-cli-reference">CLI Reference</a> ·
+  <a href="#-comparison">Comparison</a>
 </p>
 
 ---
 
 **repo2skill** analyzes any GitHub repository — README, manifests, source files, project structure — and generates a ready-to-use [OpenClaw](https://openclaw.com) `SKILL.md` with reference files. Pure heuristic analysis. Fast, deterministic, offline-capable. **No LLM required.**
 
-## ⚡ Quick Start
+> **v3.5.0** — Multi-language support (20+ languages), monorepo detection, README parser, quality reports, and 100+ tests.
+
+## 🚀 Quick Start
 
 ```bash
+# Install globally
 npm install -g repo2skill
 
-repo2skill sindresorhus/got
-# → ./skills/got/SKILL.md ✅
+# Generate a skill from any GitHub repo
+repo2skill facebook/react
+
+# From a local directory
+repo2skill --local ./my-project
+
+# Dry run — preview without writing files
+repo2skill --dry-run openai/openai-node
 ```
 
+**Output:**
 ```
-🔍 Cloning https://github.com/sindresorhus/got...
-🧠 Analyzing repository...
-🛠️ Generating skill...
-
-✅ Skill generated: ./skills/got
-   SKILL.md: ./skills/got/SKILL.md
-   References: 2 file(s)
+✅ Skill generated: ./skills/react/
+   SKILL.md: ./skills/react/SKILL.md
+   References: 3 file(s)
+   Quality: 85/100 ██████████████████░░ Good
 ```
 
 ## ✨ Features
 
-| Feature | Description |
-|---------|-------------|
-| 🧠 **Smart README Parsing** | Extracts descriptions, usage examples, API docs, install instructions |
-| 🌐 **16 Languages** | JS/TS, Python, Rust, Go, Java, Kotlin, Ruby, C/C++, PHP, Elixir, Swift, Dart, Zig, Lua, Haskell, Scala |
-| 🎯 **Trigger Phrase Gen** | Auto-generates "when to use" and trigger phrases for skill matching |
-| 📦 **Batch Mode** | Process dozens of repos from a file with `--batch` + `--parallel` |
-| 📄 **Templates** | `minimal`, `detailed`, `security`, `default` — control output detail |
-| 🔄 **Upgrade Mode** | `--upgrade` regenerates skills while preserving `<!-- manual -->` sections |
-| 📊 **Quality Scoring** | 0-100 score with `--min-quality` filtering |
-| 🔀 **Diff Mode** | `--diff` compares existing SKILL.md against latest repo state |
-| 🐙 **GitHub Integration** | Stars, forks, topics, releases via API (cached) |
-| 📝 **Lint & Validate** | `lint` and `validate` subcommands for SKILL.md quality |
-| 🔍 **Compare** | Side-by-side repo comparison |
-| 🗂️ **Registry** | Track and bulk-update generated skills |
-| 📋 **Structured Output** | `--format json\|yaml` for programmatic use |
-| 🐳 **Docker Detection** | Extracts base image, ports, entrypoint |
-| 📈 **Dependency Report** | `--show-deps` analyzes project dependencies |
-| 🏷️ **Version Pinning** | `--version-tag` pins skills to git tags |
-| 🚀 **Publish** | `--publish` pushes to ClawHub in one command |
-| 🎮 **Interactive Mode** | `-i` guided step-by-step |
-| ⚡ **Cached API** | In-memory + disk cache for GitHub API (v3.0) |
+### Core
+- 🔍 **Deep repository analysis** — README, manifests, source code, dependencies, Docker, CI/CD
+- 📝 **AgentSkills spec output** — Generates valid SKILL.md with description, when-to-use, triggers, references
+- 🌍 **20+ language support** — TypeScript, Python, Rust, Go, Java, C#, Swift, Kotlin, Ruby, PHP, Elixir, Dart, Scala, Haskell, Lua, Zig, C/C++, R, and more
+- 📦 **Monorepo detection** — npm/yarn/pnpm workspaces, Lerna, Nx, Turborepo, directory-based
+- 🧠 **Framework detection** — MCP servers, AI agents, web frameworks, CLI tools, serverless, libraries
+- 📖 **Smart README parsing** — Extracts install commands, usage examples, badges, features, env vars
 
-## 🏗️ Architecture
+### Quality & Validation
+- 📊 **Quality scoring** — 0-100 score with breakdown (description, examples, features, API docs)
+- ✅ **Linting & validation** — AgentSkills spec compliance checking
+- 🏥 **Health checks** — Detect stale, broken, or incomplete skills
+- 🔄 **Upgrade mode** — Re-analyze repos and regenerate skills, preserving manual sections
 
-```mermaid
-graph LR
-    A[GitHub URL / Local Path] --> B[Clone --depth 1]
-    B --> C[Analyzer]
-    C --> D[Language Detection]
-    C --> E[README Parser]
-    C --> F[Manifest Parser]
-    C --> G[File Tree Scanner]
-    D & E & F & G --> H[RepoAnalysis]
-    H --> I[Template Engine]
-    I --> J[SKILL.md]
-    I --> K[references/]
-    H --> L[Quality Scorer]
-    H --> M[GitHub API ⚡cached]
-```
-
-1. **Clone** — shallow clone (`--depth 1`)
-2. **Detect** — identify languages from extensions and manifests
-3. **Parse** — extract metadata from README, package.json/Cargo.toml/go.mod/etc.
-4. **Analyze** — detect CLI commands, Docker, monorepo, tests, CI
-5. **Generate** — produce `SKILL.md` with frontmatter, triggers, quick start
-6. **Score** — rate quality (0-100) based on completeness
-
-## 📖 Usage Examples
-
-```bash
-# GitHub URL or owner/repo shorthand
-repo2skill https://github.com/BurntSushi/ripgrep
-repo2skill sindresorhus/got
-
-# Local directory (no clone)
-repo2skill --local ./my-project
-
-# Dry run preview
-repo2skill sindresorhus/got --dry-run
-
-# Different templates
-repo2skill sindresorhus/got --template minimal
-repo2skill sindresorhus/got --template security
-
-# JSON output
-repo2skill sindresorhus/got --json | jq '.features'
-
-# Batch conversion (parallel)
-repo2skill --batch repos.txt --parallel 4 --min-quality 60
-
-# Monorepo package targeting
-repo2skill vercel/turborepo --package packages/turbo
-
-# Upgrade existing skill
-repo2skill --upgrade ./skills/got
-
-# Diff against existing
-repo2skill sindresorhus/got --diff ./skills/got/SKILL.md
-
-# Generate + publish
-repo2skill sindresorhus/got --publish
-```
-
-## 📤 Example Output
-
-`repo2skill BurntSushi/ripgrep` produces:
-
-```
-skills/ripgrep/
-├── SKILL.md
-└── references/
-    ├── README.md
-    └── api.md
-```
-
-Generated `SKILL.md`:
-
-```markdown
----
-name: ripgrep
-description: >-
-  ripgrep recursively searches directories for a regex pattern
-  while respecting your gitignore. WHEN: search files, find in code,
-  run rg commands.
----
-
-# ripgrep
-
-ripgrep recursively searches directories for a regex pattern
-while respecting your gitignore.
-
-## When to Use
-- Run `rg` commands
-- Search through files or text
-- Fast recursive grep with gitignore support
-
-## Quick Start
-​```bash
-cargo install ripgrep
-rg "pattern" /path/to/search
-​```
-
-## Project Info
-- **Language:** Rust
-- **License:** Unlicense/MIT
-- **Tests:** Yes
-```
+### Workflow
+- 📋 **Batch mode** — Process multiple repos from a file, with parallel workers
+- 🎯 **Templates** — `minimal`, `detailed`, `security`, `default` — or scaffold by type (cli, mcp-server, web-api, library)
+- 📈 **Diff & compare** — Compare two repos or track skill changes over time
+- 🔗 **Dependency graphs** — Visualize skill relationships as interactive HTML
+- 📜 **Changelog generation** — Skill-relevant changelog from git history
+- 🏪 **Registry & publish** — Track skills locally, publish to ClawHub
+- 🤖 **AI enhancement** — Optional LLM-powered description improvement (requires API key)
+- 📤 **Multi-format output** — Markdown (default), JSON, YAML
 
 ## 🌍 Supported Languages
 
-| Language | Manifest | Extracted |
-|----------|----------|-----------|
-| Node.js / TypeScript | `package.json` | name, description, bin, deps, license |
-| Python | `pyproject.toml`, `setup.py` | name, description, CLI scripts |
-| Rust | `Cargo.toml` | name, binary targets, license |
-| Go | `go.mod` | module name, dependencies |
-| Java / Kotlin | `pom.xml`, `build.gradle(.kts)` | artifact info, deps |
-| Ruby | `Gemfile`, `*.gemspec` | gem name, executables |
-| C/C++ | `CMakeLists.txt`, `Makefile` | project name, targets |
-| PHP | `composer.json` | name, description, deps |
-| Elixir | `mix.exs` | app name, version |
-| Swift | `Package.swift` | targets, dependencies |
-| Dart, Zig, Lua, Haskell, Scala, C# | various | basic detection |
+| Language | Package File | Entry Points | Install Template |
+|----------|-------------|-------------|-----------------|
+| TypeScript | `package.json` | `src/index.ts` | `npm install {name}` |
+| JavaScript | `package.json` | `index.js` | `npm install {name}` |
+| Python | `pyproject.toml`, `setup.py` | `main.py`, `app.py` | `pip install {name}` |
+| Rust | `Cargo.toml` | `src/main.rs`, `src/lib.rs` | `cargo install {name}` |
+| Go | `go.mod` | `main.go`, `cmd/` | `go install {name}@latest` |
+| Java | `pom.xml`, `build.gradle` | `src/main/java/` | Maven/Gradle |
+| C# | `*.csproj`, `*.sln` | `Program.cs` | `dotnet add package {name}` |
+| Swift | `Package.swift` | `Sources/` | Swift PM |
+| Kotlin | `build.gradle.kts` | `src/main/kotlin/` | Gradle |
+| Ruby | `Gemfile`, `*.gemspec` | `lib/`, `bin/` | `gem install {name}` |
+| PHP | `composer.json` | `src/`, `index.php` | `composer require {name}` |
+| Elixir | `mix.exs` | `lib/` | `mix deps.get` |
+| Dart | `pubspec.yaml` | `lib/`, `bin/` | `dart pub add {name}` |
+| Scala | `build.sbt` | `src/main/scala/` | sbt |
+| Haskell | `*.cabal`, `stack.yaml` | `app/Main.hs` | `stack install {name}` |
+| Lua | `*.rockspec` | `init.lua` | `luarocks install {name}` |
+| Zig | `build.zig` | `src/main.zig` | `zig build` |
+| C/C++ | `CMakeLists.txt`, `Makefile` | `main.c`, `main.cpp` | `make` |
+| R | `DESCRIPTION` | `R/` | `install.packages('{name}')` |
 
-## ⚔️ repo2skill vs Alternatives
+## 📦 Monorepo Support
 
-| | **repo2skill** | Manual Writing | LLM-based |
-|---|---|---|---|
-| ⏱️ Speed | ~10 seconds | 15-30 minutes | 30-60 seconds |
-| 🎯 Accuracy | Deterministic | Varies by author | Hallucination risk |
-| 💰 Cost | Free | Free (your time) | API costs |
-| 🔒 Privacy | Offline-capable | N/A | Sends code to API |
-| 📦 Batch | ✅ Parallel | Manual | Manual |
-| 🔄 Reproducible | 100% | No | No |
-| 🌐 Languages | 16 | You decide | Varies |
-
-## 📊 150+ Converted Examples
-
-All in [`examples/`](./examples):
-
-| Repo | Language | Category |
-|------|----------|----------|
-| [BurntSushi/ripgrep](https://github.com/BurntSushi/ripgrep) | Rust | CLI Tool |
-| [sindresorhus/got](https://github.com/sindresorhus/got) | TypeScript | Library |
-| [tiangolo/fastapi](https://github.com/tiangolo/fastapi) | Python | Framework |
-| [gin-gonic/gin](https://github.com/gin-gonic/gin) | Go | Framework |
-| [facebook/react](https://github.com/facebook/react) | JavaScript | Framework |
-| [prisma/prisma](https://github.com/prisma/prisma) | TypeScript | Library |
-| [hashicorp/terraform](https://github.com/hashicorp/terraform) | Go | DevOps |
-| [redis/redis](https://github.com/redis/redis) | C | Database |
-| ... [and 142 more](./examples) | | |
-
-## 🔌 Use as OpenClaw Skill
+repo2skill automatically detects monorepos and can generate skills per package:
 
 ```bash
-clawhub install repo2skill
+# Detect monorepo structure
+repo2skill monorepo ./my-monorepo
+# Detected 5 packages (npm-workspaces):
+#   packages/core → skill-core.md
+#   packages/cli  → skill-cli.md
+#   packages/web  → skill-web.md
+
+# Target a specific package
+repo2skill --local ./my-monorepo --package packages/core
+
+# Generate from remote monorepo
+repo2skill vercel/next.js --package packages/next
 ```
 
-Then ask your agent: *"Convert sindresorhus/got into a skill"*
+**Supported monorepo tools:** npm workspaces, yarn workspaces, pnpm workspaces, Lerna, Nx, Turborepo, directory-based detection.
 
-## 📚 Documentation
+## 📖 README Parser
 
-- [CLI Reference](docs/cli-reference.md) — all commands and flags
-- [Templates](docs/templates.md) — template system guide
-- [Configuration](docs/configuration.md) — env vars, quality scoring, batch format
+The built-in README parser extracts structured information:
+
+```typescript
+import { parseReadme } from 'repo2skill/readme-parser';
+
+const info = parseReadme(readmeContent);
+// info.title         → "My Project"
+// info.description   → "A fast, lightweight..."
+// info.installCommands → [{ command: "npm install my-project", manager: "npm" }]
+// info.usageExamples → [{ code: "...", language: "typescript", context: "Usage" }]
+// info.badges        → [{ type: "npm", label: "version", ... }]
+// info.features      → ["Fast processing", "Type-safe API", ...]
+// info.envVars       → ["OPENAI_API_KEY", "DATABASE_URL"]
+// info.prerequisites → ["Node.js >= 18", "npm >= 9"]
+```
+
+## 📋 CLI Reference
+
+### Main Command
+
+```bash
+repo2skill [repo] [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `-o, --output <dir>` | Output directory (default: `./skills`) |
+| `-n, --name <name>` | Override skill name |
+| `-l, --local <path>` | Analyze local directory |
+| `-b, --batch <file>` | Batch mode from file |
+| `--parallel <n>` | Parallel workers for batch |
+| `-f, --format <type>` | Output: `markdown`, `json`, `yaml` |
+| `-j, --json` | JSON output shorthand |
+| `-d, --dry-run` | Preview without writing |
+| `-t, --template <name>` | Template: `minimal`, `detailed`, `security`, `default` |
+| `--package <path>` | Target monorepo package |
+| `--ai` | LLM enhancement (needs `OPENAI_API_KEY`) |
+| `-i, --interactive` | Interactive guided mode |
+| `--min-quality <n>` | Skip skills below quality score |
+| `--no-github` | Skip GitHub API metadata |
+| `-p, --publish` | Publish to ClawHub after generating |
+
+### Subcommands
+
+```bash
+# Validate against AgentSkills spec
+repo2skill validate ./skills/react/SKILL.md
+
+# Quality testing
+repo2skill test ./skills/react/SKILL.md
+repo2skill lint ./skills/react/SKILL.md
+
+# Health check
+repo2skill health ./skills/react/SKILL.md
+
+# Compare two repos
+repo2skill compare facebook/react preactjs/preact
+
+# Diff two SKILL.md files
+repo2skill diff old-skill.md new-skill.md
+
+# Check for upstream updates
+repo2skill check-updates ./skills/react/SKILL.md
+
+# Monorepo detection
+repo2skill monorepo ./my-monorepo
+
+# Git changelog
+repo2skill changelog facebook/react --max 100
+
+# Dependency graph visualization
+repo2skill graph ./skills/ -o graph.html
+
+# Quality report
+repo2skill quality-report ./skills/ -o report.html
+
+# Scaffold from template
+repo2skill template --type cli --name my-tool
+
+# Registry management
+repo2skill registry list
+repo2skill registry add facebook/react
+repo2skill registry update-all
+
+# Version info
+repo2skill version-info ./skills/react/SKILL.md
+
+# Merge multiple skills
+repo2skill merge skill1.md skill2.md -o merged.md
+
+# List available templates
+repo2skill templates
+```
+
+## 🔄 Comparison with Alternatives
+
+| Feature | repo2skill | Manual writing | LLM-generated |
+|---------|-----------|---------------|--------------|
+| Speed | ⚡ <2s per repo | 🐌 30-60 min | 🔄 10-30s |
+| Deterministic | ✅ Same input = same output | ❌ Varies by author | ❌ Non-deterministic |
+| Offline | ✅ No API needed | ✅ | ❌ Needs API |
+| Cost | 🆓 Free | 🆓 Free | 💰 API costs |
+| Quality | 📊 Scored & validated | ❓ No metrics | ❓ Unpredictable |
+| 20+ Languages | ✅ | ❌ Manual per language | 🔄 Depends on model |
+| Monorepo | ✅ Auto-detect | ❌ Manual | ❌ No awareness |
+| Batch processing | ✅ Parallel | ❌ | ❌ |
+| Upgrade/diff | ✅ Built-in | ❌ | ❌ |
+| Spec compliance | ✅ Validated | ❓ | ❓ |
+
+## 🧪 Examples
+
+### Basic: Generate from GitHub
+
+```bash
+repo2skill langchain-ai/langchain
+# ✅ Skill generated: ./skills/langchain/
+#    Quality: 82/100 ████████████████░░░░ Good
+```
+
+### Batch: Process Multiple Repos
+
+```bash
+# repos.txt:
+# facebook/react
+# vuejs/vue
+# sveltejs/svelte
+
+repo2skill --batch repos.txt --parallel 3 --min-quality 60
+# 📋 Batch mode: 3 repo(s) (parallel: 3)
+# ✅ react: 87/100
+# ✅ vue: 84/100
+# ✅ svelte: 81/100
+# 📊 Batch complete: 3 succeeded, 0 failed
+```
+
+### JSON Output for Automation
+
+```bash
+repo2skill --json openai/openai-node | jq '.features'
+```
+
+### Compare Repos
+
+```bash
+repo2skill compare expressjs/express fastify/fastify
+# ┌─────────────┬───────────┬──────────┐
+# │             │ express   │ fastify  │
+# ├─────────────┼───────────┼──────────┤
+# │ Language    │ JS        │ JS       │
+# │ Quality     │ 78/100    │ 82/100   │
+# │ Features    │ 6         │ 9        │
+# │ Type        │ web-fmwk  │ web-fmwk │
+# └─────────────┴───────────┴──────────┘
+```
+
+## 🏗️ Architecture
+
+```
+repo2skill
+├── src/
+│   ├── cli.ts           # CLI entry point (Commander.js)
+│   ├── index.ts         # Main API
+│   ├── analyzer.ts      # Repository analysis engine
+│   ├── generator.ts     # SKILL.md generation + quality scoring
+│   ├── languages.ts     # 20+ language configs & detection
+│   ├── readme-parser.ts # Structured README extraction
+│   ├── monorepo.ts      # Monorepo detection (6 tools)
+│   ├── templates.ts     # Template system
+│   ├── linter.ts        # AgentSkills spec linting
+│   ├── validator.ts     # Validation engine
+│   ├── health.ts        # Health checks
+│   ├── compare.ts       # Repo comparison
+│   ├── skill-diff.ts    # Diff engine
+│   ├── skill-graph.ts   # Dependency visualization
+│   ├── changelog.ts     # Git changelog
+│   ├── ai-enhance.ts    # Optional LLM enhancement
+│   ├── formats.ts       # JSON/YAML output
+│   ├── plugin.ts        # Plugin system
+│   └── __tests__/       # 100+ tests
+└── docs/
+    ├── cli-reference.md
+    ├── templates.md
+    └── configuration.md
+```
+
+## 📦 Installation
+
+```bash
+# npm
+npm install -g repo2skill
+
+# pnpm
+pnpm add -g repo2skill
+
+# yarn
+yarn global add repo2skill
+
+# Run without installing
+npx repo2skill facebook/react
+```
+
+**Requirements:** Node.js >= 18
 
 ## 🤝 Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## 🔗 Ecosystem
-
-| Project | Description |
-|---------|-------------|
-| [AgentProbe](https://github.com/NeuZhou/agentprobe) | 🔬 Playwright for AI Agents — testing & observability |
-| [ClawGuard](https://github.com/NeuZhou/clawguard) | 🛡️ AI Agent Security Scanner |
-| [FinClaw](https://github.com/NeuZhou/finclaw) | 📈 AI-Powered Quantitative Finance |
+1. Fork the repo
+2. Create a feature branch: `git checkout -b feat/my-feature`
+3. Write tests (we have 100+!)
+4. Run tests: `npm test`
+5. Submit a PR
 
 ## 📄 License
 
 MIT © [Kang Zhou](https://github.com/NeuZhou)
+
+---
+
+<p align="center">
+  Made with 🦀 by <a href="https://github.com/NeuZhou">Kang Zhou</a>
+</p>

@@ -34,7 +34,7 @@ const program = new Command();
 program
   .name("repo2skill")
   .description("Convert any GitHub repo into an OpenClaw skill. One command.")
-  .version("3.4.0")
+  .version("3.5.0")
   .argument("[repo]", "GitHub URL or owner/repo (or local path with --local)")
   .option("-o, --output <dir>", "Output directory", "./skills")
   .option("-n, --name <name>", "Override skill name")
