@@ -3,6 +3,7 @@
 > **Convert any GitHub repo into an OpenClaw skill. 16 languages. 150+ examples.**
 
 [![npm version](https://img.shields.io/npm/v/repo2skill)](https://www.npmjs.com/package/repo2skill)
+[![CI](https://github.com/NeuZhou/repo2skill/actions/workflows/ci.yml/badge.svg)](https://github.com/NeuZhou/repo2skill/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub stars](https://img.shields.io/github/stars/NeuZhou/repo2skill)](https://github.com/NeuZhou/repo2skill)
 
@@ -34,6 +35,33 @@ That's it. Your skill is ready to drop into `~/.openclaw/workspace/skills/` or p
 npm install -g repo2skill
 ```
 
+## 🧠 How It Works
+
+```mermaid
+graph LR
+    A[GitHub URL] --> B[git clone --depth 1]
+    B --> C[Analyze Repo]
+    C --> D{Detect Language}
+    D --> E[Parse Manifests]
+    D --> F[Parse README]
+    D --> G[Scan File Tree]
+    E --> H[Extract metadata]
+    F --> H
+    G --> H
+    H --> I[Generate SKILL.md]
+    I --> J[Write References]
+    J --> K[Quality Score]
+```
+
+1. **Clone** — shallow clone the repo (only latest commit)
+2. **Detect** — identify languages from file extensions and manifests (package.json, Cargo.toml, go.mod, etc.)
+3. **Parse** — extract description, install instructions, usage examples, features, API docs from README sections
+4. **Analyze** — detect CLI commands, Docker setup, monorepo structure, test presence, CI configuration
+5. **Generate** — produce a structured `SKILL.md` with frontmatter, "When to Use" triggers, quick start, and project info
+6. **Score** — rate the generated skill quality (1–5) based on completeness
+
+No LLM involved. Pure heuristic analysis — fast, deterministic, and offline-capable.
+
 ## 🚀 Usage
 
 ```bash
@@ -49,11 +77,26 @@ repo2skill sindresorhus/got -o ./my-skills
 # Custom skill name
 repo2skill sindresorhus/got -n http-client
 
+# Verbose mode — show analysis details
+repo2skill sindresorhus/got --verbose
+
+# Dry run — preview without writing files
+repo2skill sindresorhus/got --dry-run
+
+# Analyze a local repo (no clone needed)
+repo2skill --local ./my-project
+
+# JSON output for programmatic use
+repo2skill sindresorhus/got --json
+
 # Batch mode — convert many repos at once
 repo2skill --batch repos.txt --output ./skills/
 
 # Generate + publish to ClawHub in one command
 repo2skill sindresorhus/got --publish
+
+# Upgrade an existing skill from its source repo
+repo2skill --upgrade ./skills/got
 ```
 
 ### Batch Mode
