@@ -242,9 +242,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 | Project | Description |
 |---------|-------------|
+| [AgentProbe](https://github.com/NeuZhou/agentprobe) | 🔬 Playwright for AI Agents — testing & observability |
 | [ClawGuard](https://github.com/NeuZhou/clawguard) | 🛡️ AI Agent Security Scanner |
-| [FinClaw](https://github.com/NeuZhou/finclaw) | 📈 AI Financial Intelligence Engine |
-| [awesome-llm-security](https://github.com/NeuZhou/awesome-llm-security) | 🔐 Curated LLM security resources |
+| [FinClaw](https://github.com/NeuZhou/finclaw) | 📈 AI-Powered Quantitative Finance |
 
 ## 📄 License
 
