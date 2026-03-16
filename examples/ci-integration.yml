@@ -1,0 +1,48 @@
+name: repo2skill CI Integration
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1' # Weekly Monday 6am — refresh skills
+
+jobs:
+  generate-skills:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install repo2skill
+        run: npm install -g repo2skill
+
+      - name: Generate skills from repo list
+        run: |
+          repo2skill --batch repos.txt -o ./skills --parallel 4 --min-quality 50
+
+      - name: Run quality report
+        run: |
+          repo2skill quality-report ./skills -o quality-report.html
+
+      - name: Lint all generated skills
+        run: |
+          for skill in ./skills/*/SKILL.md; do
+            echo "Linting $skill..."
+            repo2skill lint "$skill"
+          done
+
+      - name: Upload skills artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-skills
+          path: ./skills/
+
+      - name: Upload quality report
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-report
+          path: quality-report.html

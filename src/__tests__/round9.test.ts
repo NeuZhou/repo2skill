@@ -3,6 +3,7 @@
  * Tests for: languages.ts, readme-parser.ts, enhanced monorepo.ts
  */
 
+import { describe, test, expect } from "vitest";
 import {
   LANGUAGE_CONFIGS,
   detectLanguages,

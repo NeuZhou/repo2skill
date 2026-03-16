@@ -170,10 +170,13 @@ describe("Interactive mode v3.4.0", () => {
     const answers: InteractiveAnswers = {
       repo: "user/repo",
       format: "markdown",
+      outputType: "skill",
       template: "default",
       includeGithub: true,
       includeExamples: true,
       includeApi: false,
+      includeTests: true,
+      publishToClawHub: false,
     };
     expect(answers.includeExamples).toBe(true);
     expect(answers.includeApi).toBe(false);
