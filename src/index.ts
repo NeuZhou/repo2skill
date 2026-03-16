@@ -430,8 +430,8 @@ function printVerbose(analysis: RepoAnalysis) {
 }
 
 // Re-exports
-export { analyzeRepo, categorizeProject, extractInstallCommands, extractApiExamples, extractBadges, extractTOC } from "./analyzer";
-export type { RepoAnalysis, BadgeInfo, TOCEntry } from "./analyzer";
+export { analyzeRepo, categorizeProject, extractInstallCommands, extractApiExamples, extractBadges, extractTOC, detectFrameworkType } from "./analyzer";
+export type { RepoAnalysis, BadgeInfo, TOCEntry, FrameworkType } from "./analyzer";
 export { scoreSkillQuality, formatQualityScore, buildStructuredData } from "./generator";
 export type { SkillQuality, SkillStructuredData } from "./generator";
 export { fetchGitHubMetadata, parseOwnerRepo, formatGitHubSection } from "./github-integration";
@@ -460,3 +460,9 @@ export { getVersionInfo, generateVersionStamp, formatVersionLine, injectVersionI
 export type { VersionInfo } from "./versioning";
 export { validateSkillMd, formatValidationResult } from "./validator";
 export type { ValidationResult, ValidationCheck } from "./validator";
+export { testSkill, formatTestResult } from "./skill-test";
+export type { SkillTestResult, SkillTestCheck } from "./skill-test";
+export { aiEnhance, isAiAvailable } from "./ai-enhance";
+export type { AiEnhanceResult, AiEnhanceOptions } from "./ai-enhance";
+export { extractMarketplaceMetadata, generateMarketplaceJson, publishToMarketplace } from "./marketplace";
+export type { MarketplaceMetadata, PublishResult } from "./marketplace";

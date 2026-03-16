@@ -37,6 +37,7 @@ function makeAnalysis(overrides: Partial<RepoAnalysis> = {}): RepoAnalysis {
     readmeApiExamples: [],
     badges: [],
     toc: [],
+    frameworkType: "unknown",
     ...overrides,
   };
 }

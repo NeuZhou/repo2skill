@@ -18,6 +18,16 @@ export interface TOCEntry {
   title: string;
 }
 
+export type FrameworkType =
+  | "mcp-server"
+  | "ai-agent"
+  | "web-framework"
+  | "cli-tool"
+  | "library"
+  | "service"
+  | "serverless"
+  | "unknown";
+
 export interface RepoAnalysis {
   name: string;
   description: string;
@@ -61,6 +71,8 @@ export interface RepoAnalysis {
   badges: BadgeInfo[];
   /** Smart README parsing: table of contents structure */
   toc: TOCEntry[];
+  /** Detected framework/project type */
+  frameworkType: FrameworkType;
 }
 
 export async function analyzeRepo(repoDir: string, repoName: string): Promise<RepoAnalysis> {
@@ -97,6 +109,7 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
     readmeApiExamples: [],
     badges: [],
     toc: [],
+    frameworkType: "unknown",
   };
 
   // File tree (top 2 levels)
@@ -741,7 +754,98 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
   analysis.whenNotToUse = generateWhenNotToUse(analysis);
   analysis.triggerPhrases = generateTriggerPhrases(analysis);
 
+  // Framework/project type detection
+  analysis.frameworkType = detectFrameworkType(repoDir, analysis, allFiles);
+
   return analysis;
+}
+
+/**
+ * Detect framework/project type from dependencies, file patterns, and source code.
+ */
+export function detectFrameworkType(repoDir: string, analysis: RepoAnalysis, allFiles: string[]): FrameworkType {
+  const deps = analysis.dependencies.map(d => d.toLowerCase());
+  const desc = (analysis.description + " " + analysis.richDescription + " " + analysis.readmeRaw.slice(0, 2000)).toLowerCase();
+  const allFilesLower = allFiles.map(f => f.toLowerCase());
+
+  // MCP Server detection
+  const mcpDeps = ["@modelcontextprotocol/sdk", "mcp", "fastmcp", "mcp-server"];
+  if (deps.some(d => mcpDeps.some(m => d.includes(m)))) return "mcp-server";
+  // Check source for server.tool() patterns
+  const srcFiles = allFiles.filter(f => /\.(ts|js|py)$/.test(f)).slice(0, 20);
+  for (const f of srcFiles) {
+    try {
+      const content = fs.readFileSync(path.join(repoDir, f), "utf-8").slice(0, 5000);
+      if (/server\.tool\s*\(/.test(content) || /McpServer|StdioServerTransport|FastMCP/.test(content)) {
+        return "mcp-server";
+      }
+    } catch {}
+  }
+  if (desc.includes("mcp server") || desc.includes("model context protocol")) return "mcp-server";
+
+  // AI Agent frameworks
+  const aiDeps = ["langchain", "langgraph", "crewai", "autogen", "openai", "anthropic", "llamaindex", "llama-index",
+    "semantic-kernel", "guidance", "dspy", "haystack", "transformers", "@langchain/core"];
+  if (deps.some(d => aiDeps.some(a => d.includes(a)))) {
+    // Distinguish agent frameworks from simple API wrappers
+    const agentPatterns = ["agent", "chain", "crew", "autogen", "langgraph", "workflow", "orchestrat"];
+    if (deps.some(d => agentPatterns.some(a => d.includes(a))) || desc.match(/\b(agent|multi-agent|agentic|orchestrat)/)) {
+      return "ai-agent";
+    }
+  }
+
+  // Web frameworks
+  const webFrameworks: Record<string, string[]> = {
+    "next": ["next", "@next/"],
+    "nuxt": ["nuxt", "@nuxt/"],
+    "sveltekit": ["@sveltejs/kit"],
+    "remix": ["@remix-run/"],
+    "astro": ["astro"],
+    "gatsby": ["gatsby"],
+    "express": ["express"],
+    "fastify": ["fastify"],
+    "hono": ["hono"],
+    "flask": ["flask"],
+    "django": ["django"],
+    "fastapi": ["fastapi"],
+    "rails": ["rails"],
+    "spring": ["spring-boot", "spring-web"],
+    "gin": ["github.com/gin-gonic/gin"],
+    "fiber": ["github.com/gofiber/fiber"],
+    "actix": ["actix-web"],
+    "axum": ["axum"],
+  };
+  for (const [, patterns] of Object.entries(webFrameworks)) {
+    if (deps.some(d => patterns.some(p => d.includes(p)))) return "web-framework";
+  }
+  if (allFilesLower.some(f => f === "next.config.js" || f === "next.config.mjs" || f === "next.config.ts")) return "web-framework";
+  if (allFilesLower.some(f => f === "nuxt.config.ts" || f === "nuxt.config.js")) return "web-framework";
+  if (allFilesLower.some(f => f === "svelte.config.js" || f === "svelte.config.ts")) return "web-framework";
+  if (allFilesLower.some(f => f === "astro.config.mjs" || f === "astro.config.ts")) return "web-framework";
+
+  // Serverless functions
+  const serverlessPatterns = [
+    "serverless.yml", "serverless.yaml", "serverless.ts",
+    "sam.yaml", "template.yaml",
+    "vercel.json",
+    "netlify.toml",
+    "firebase.json",
+  ];
+  if (allFilesLower.some(f => serverlessPatterns.includes(f))) return "serverless";
+  if (deps.some(d => d.includes("@aws-cdk") || d.includes("aws-lambda") || d.includes("@azure/functions") || d.includes("@google-cloud/functions-framework"))) return "serverless";
+  if (allFiles.some(f => /^functions?\//i.test(f) && /\.(ts|js|py)$/.test(f)) && (deps.includes("firebase-functions") || deps.includes("firebase-admin"))) return "serverless";
+
+  // CLI tool (already has cliCommands)
+  if (analysis.cliCommands.length > 0) return "cli-tool";
+
+  // Service (has Dockerfile + exposed ports or docker-compose)
+  if (analysis.dockerInfo && analysis.dockerInfo.exposedPorts.length > 0) return "service";
+  if (allFilesLower.some(f => f === "docker-compose.yml" || f === "docker-compose.yaml")) return "service";
+
+  // Library (default for anything with package manifest)
+  if (analysis.packageName || analysis.dependencies.length > 0) return "library";
+
+  return "unknown";
 }
 
 function findFile(dir: string, names: string[]): string | null {

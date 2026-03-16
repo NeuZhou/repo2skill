@@ -12,6 +12,9 @@ import { runInteractive } from "./interactive";
 import { analyzeRepo } from "./analyzer";
 import { resolveDependencies, formatDependencies } from "./dependencies";
 import { validateSkillMd, formatValidationResult } from "./validator";
+import { testSkill, formatTestResult } from "./skill-test";
+import { publishToMarketplace } from "./marketplace";
+import { aiEnhance, isAiAvailable } from "./ai-enhance";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
@@ -22,7 +25,7 @@ const program = new Command();
 program
   .name("repo2skill")
   .description("Convert any GitHub repo into an OpenClaw skill. One command.")
-  .version("3.0.0")
+  .version("3.1.0")
   .argument("[repo]", "GitHub URL or owner/repo (or local path with --local)")
   .option("-o, --output <dir>", "Output directory", "./skills")
   .option("-n, --name <name>", "Override skill name")
@@ -44,6 +47,7 @@ program
   .option("--show-deps", "Show dependency report for a repo")
   .option("--version-tag <tag>", "Pin skill to a specific git tag")
   .option("--check-updates", "Check for newer version of repo2skill")
+  .option("--ai", "Use LLM to enhance generated skill descriptions (requires OPENAI_API_KEY)")
   .option("-i, --interactive", "Interactive guided mode")
   .action(async (repo: string | undefined, opts: any) => {
     try {
@@ -340,6 +344,8 @@ function showStats(outputDir: string) {
   let totalSkills = 0;
   let totalSize = 0;
   const languages: Record<string, number> = {};
+  const qualityScores: number[] = [];
+  const featureCounts: Record<string, number> = {};
 
   for (const entry of entries) {
     const skillMdPath = path.join(outputDir, entry.name, "SKILL.md");
@@ -356,6 +362,27 @@ function showStats(outputDir: string) {
         if (lang) languages[lang] = (languages[lang] || 0) + 1;
       }
     }
+
+    // Extract quality score
+    const qualityMatch = content.match(/Quality Score:\s*(\d+)/);
+    if (qualityMatch) qualityScores.push(parseInt(qualityMatch[1]));
+
+    // Count feature keywords
+    const featureSection = content.match(/##\s+(?:Features|What it does|Key Capabilities)[\s\S]*?(?=\n##|\n$)/i);
+    if (featureSection) {
+      const bullets = featureSection[0].match(/^[-*]\s+(.+)/gm);
+      if (bullets) {
+        for (const b of bullets) {
+          const text = b.replace(/^[-*]\s+/, "").toLowerCase();
+          if (text.includes("cli") || text.includes("command")) featureCounts["CLI"] = (featureCounts["CLI"] || 0) + 1;
+          if (text.includes("api") || text.includes("rest") || text.includes("http")) featureCounts["API"] = (featureCounts["API"] || 0) + 1;
+          if (text.includes("config") || text.includes("configuration")) featureCounts["Config"] = (featureCounts["Config"] || 0) + 1;
+          if (text.includes("test")) featureCounts["Testing"] = (featureCounts["Testing"] || 0) + 1;
+          if (text.includes("docker") || text.includes("container")) featureCounts["Docker"] = (featureCounts["Docker"] || 0) + 1;
+          if (text.includes("type") && text.includes("safe")) featureCounts["Type-safe"] = (featureCounts["Type-safe"] || 0) + 1;
+        }
+      }
+    }
   }
 
   if (totalSkills === 0) {
@@ -365,15 +392,31 @@ function showStats(outputDir: string) {
 
   const avgSize = Math.round(totalSize / totalSkills);
   const sortedLangs = Object.entries(languages).sort((a, b) => b[1] - a[1]);
+  const avgQuality = qualityScores.length > 0 ? Math.round(qualityScores.reduce((a, b) => a + b, 0) / qualityScores.length) : 0;
+  const sortedFeatures = Object.entries(featureCounts).sort((a, b) => b[1] - a[1]);
 
-  console.log(`\n📊 Skill Stats — ${outputDir}\n`);
-  console.log(`  Total skills:     ${totalSkills}`);
+  console.log(`\n📊 repo2skill Statistics — ${outputDir}\n`);
+  console.log(`  Skills generated: ${totalSkills}`);
   console.log(`  Avg SKILL.md:     ${(avgSize / 1024).toFixed(1)} KB (${avgSize} bytes)`);
+  if (avgQuality > 0) {
+    console.log(`  Avg quality:      ${avgQuality}/100`);
+  }
+
   console.log(`\n  Languages:`);
   for (const [lang, count] of sortedLangs) {
-    const bar = "█".repeat(Math.min(count, 20));
-    console.log(`    ${lang.padEnd(15)} ${bar} ${count}`);
+    const pct = Math.round((count / totalSkills) * 100);
+    const bar = "█".repeat(Math.min(Math.round(pct / 5), 20));
+    console.log(`    ${lang.padEnd(15)} ${bar} ${count} (${pct}%)`);
   }
+
+  if (sortedFeatures.length > 0) {
+    console.log(`\n  Most common features:`);
+    for (const [feature, count] of sortedFeatures.slice(0, 6)) {
+      const pct = Math.round((count / totalSkills) * 100);
+      console.log(`    ${feature.padEnd(15)} ${pct}%`);
+    }
+  }
+
   console.log("");
 }
 
@@ -406,6 +449,40 @@ program
     const result = validateSkillMd(filePath);
     console.log(formatValidationResult(result));
     if (result.failed > 0) process.exit(1);
+  });
+
+// Test subcommand
+program
+  .command("test <file>")
+  .description("Test a generated SKILL.md for quality and correctness")
+  .action((file: string) => {
+    const filePath = path.resolve(file);
+    if (!fs.existsSync(filePath)) {
+      console.error(`❌ File not found: ${filePath}`);
+      process.exit(1);
+    }
+    const result = testSkill(filePath);
+    console.log(formatTestResult(result));
+    if (result.failed > 0) process.exit(1);
+  });
+
+// Publish subcommand
+program
+  .command("publish <skill-path>")
+  .description("Publish a skill to ClawHub registry")
+  .option("-r, --registry <name>", "Registry name", "clawhub")
+  .action(async (skillPath: string, opts: any) => {
+    const resolvedPath = path.resolve(skillPath);
+    const result = await publishToMarketplace(resolvedPath, opts.registry);
+    if (result.success) {
+      console.log(`✅ ${result.message}`);
+    } else {
+      console.log(`⚠️  ${result.message}`);
+      if (result.metadata) {
+        console.log(`   Name: ${result.metadata.name}`);
+        console.log(`   Tags: ${result.metadata.tags.join(", ")}`);
+      }
+    }
   });
 
 // Lint subcommand
