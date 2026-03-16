@@ -17,13 +17,18 @@ program
   .option("-b, --batch <file>", "Batch mode: file with one repo URL per line")
   .option("-j, --json", "Output analysis as JSON instead of generating files")
   .option("-d, --dry-run", "Preview what would be generated without writing files")
+  .option("-v, --verbose", "Show detailed analysis during generation")
   .option("-s, --stats", "Show aggregate stats of generated skills in output directory")
   .option("-p, --publish", "Publish to ClawHub after generating")
   .option("-u, --upgrade <skill-dir>", "Re-analyze and regenerate an existing skill, preserving <!-- manual --> sections")
   .option("-l, --local <path>", "Analyze a local repo without cloning")
   .option("--min-quality <score>", "Skip skills below this quality score (1-5)", parseInt)
-  .action(async (repo: string | undefined, opts: { output: string; name?: string; batch?: string; json?: boolean; dryRun?: boolean; stats?: boolean; publish?: boolean; upgrade?: string; local?: string; minQuality?: number }) => {
+  .action(async (repo: string | undefined, opts: { output: string; name?: string; batch?: string; json?: boolean; dryRun?: boolean; verbose?: boolean; stats?: boolean; publish?: boolean; upgrade?: string; local?: string; minQuality?: number }) => {
     try {
+      // Set verbose mode globally
+      if (opts.verbose) {
+        process.env.REPO2SKILL_VERBOSE = "1";
+      }
       if (opts.upgrade) {
         const result = await upgradeSkill(path.resolve(opts.upgrade));
         console.log(`\n✅ Skill upgraded: ${result.skillDir}`);

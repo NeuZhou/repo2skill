@@ -71,6 +71,23 @@ export async function repo2skill(
       console.warn(`⚠️  Warning: No README or description found. The generated skill may be sparse.`);
     }
 
+    if (process.env.REPO2SKILL_VERBOSE === "1") {
+      console.log(`\n📋 Analysis Details:`);
+      console.log(`   Name:        ${analysis.name}`);
+      console.log(`   Package:     ${analysis.packageName || "(none)"}`);
+      console.log(`   Languages:   ${analysis.languages.join(", ") || "unknown"}`);
+      console.log(`   Description: ${(analysis.description || "").slice(0, 100)}${(analysis.description || "").length > 100 ? "..." : ""}`);
+      console.log(`   CLI cmds:    ${analysis.cliCommands.map(c => c.name).join(", ") || "(none)"}`);
+      console.log(`   Features:    ${analysis.features.length}`);
+      console.log(`   Has tests:   ${analysis.hasTests}`);
+      console.log(`   License:     ${analysis.license || "unknown"}`);
+      console.log(`   Monorepo:    ${analysis.isMonorepo}`);
+      console.log(`   Deps:        ${analysis.dependencies.length}`);
+      console.log(`   Examples:    ${analysis.usageExamples.length} code blocks`);
+      console.log(`   Docker:      ${analysis.dockerInfo ? "yes" : "no"}`);
+      console.log("");
+    }
+
     // Generate
     console.log(`⚙️  Generating skill...`);
     const skillDir = path.join(options.outputDir, skillName);
