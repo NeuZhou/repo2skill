@@ -2,6 +2,8 @@ import * as path from "path";
 import * as fs from "fs";
 import { RepoAnalysis } from "./analyzer";
 import { Repo2SkillResult } from "./index";
+import { TemplateConfig, getTemplate } from "./templates";
+import { GitHubMetadata, formatGitHubSection } from "./github-integration";
 
 export interface SkillQualityDetail {
   label: string;
@@ -98,13 +100,16 @@ export function generateSkill(
   analysis: RepoAnalysis,
   skillDir: string,
   skillName: string,
-  sourceRepo?: string
+  sourceRepo?: string,
+  templateName?: string,
+  githubMeta?: GitHubMetadata | null,
 ): Repo2SkillResult {
   fs.mkdirSync(skillDir, { recursive: true });
 
+  const template = templateName ? getTemplate(templateName) : getTemplate("default");
   const isCLI = analysis.cliCommands.length > 0;
   const description = buildDescription(analysis, isCLI);
-  const body = buildBody(analysis, skillName, isCLI);
+  const body = buildBody(analysis, skillName, isCLI, template, githubMeta);
   const generatedAt = new Date().toISOString();
   const repoLine = sourceRepo ? `\nsource_repo: ${sourceRepo}` : "";
 
@@ -124,18 +129,21 @@ ${body}
   let referencesCount = 0;
   const refsDir = path.join(skillDir, "references");
 
-  // API reference
-  if (analysis.apiSection && analysis.apiSection.length > 200) {
-    fs.mkdirSync(refsDir, { recursive: true });
-    fs.writeFileSync(path.join(refsDir, "api.md"), `# API Reference — ${skillName}\n\n${analysis.apiSection}`);
-    referencesCount++;
-  }
+  // References (only if template allows)
+  if (template ? getTemplate(template.name).includeReferences : true) {
+    // API reference
+    if (analysis.apiSection && analysis.apiSection.length > 200) {
+      fs.mkdirSync(refsDir, { recursive: true });
+      fs.writeFileSync(path.join(refsDir, "api.md"), `# API Reference — ${skillName}\n\n${analysis.apiSection}`);
+      referencesCount++;
+    }
 
-  // Full README as reference
-  if (analysis.readmeRaw.length > 1000) {
-    fs.mkdirSync(refsDir, { recursive: true });
-    fs.writeFileSync(path.join(refsDir, "README.md"), analysis.readmeRaw);
-    referencesCount++;
+    // Full README as reference
+    if (analysis.readmeRaw.length > 1000) {
+      fs.mkdirSync(refsDir, { recursive: true });
+      fs.writeFileSync(path.join(refsDir, "README.md"), analysis.readmeRaw);
+      referencesCount++;
+    }
   }
 
   return { skillDir, referencesCount };
@@ -206,7 +214,8 @@ function buildDescription(analysis: RepoAnalysis, isCLI: boolean): string {
   return full.slice(0, 200);
 }
 
-function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): string {
+function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean, template?: TemplateConfig, githubMeta?: GitHubMetadata | null): string {
+  const t = template || getTemplate("default");
   const lines: string[] = [];
 
   lines.push(`# ${skillName}`);
@@ -408,6 +417,29 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
     if (analysis.dockerInfo.entrypoint) {
       lines.push(`- **Entrypoint:** \`${analysis.dockerInfo.entrypoint}\``);
     }
+    lines.push("");
+  }
+
+  // GitHub Stats (if available and template allows)
+  if (githubMeta && t.sections.githubStats) {
+    lines.push(formatGitHubSection(githubMeta));
+  }
+
+  // Security sections (security template)
+  if (t.sections.securityConsiderations) {
+    lines.push("## Security Considerations");
+    lines.push("");
+    lines.push("<!-- manual -->");
+    lines.push("_Add security notes, auth patterns, and known CVEs here._");
+    lines.push("<!-- /manual -->");
+    lines.push("");
+  }
+  if (t.sections.threatModel) {
+    lines.push("## Threat Model");
+    lines.push("");
+    lines.push("<!-- manual -->");
+    lines.push("_Document threat model, attack surfaces, and mitigations here._");
+    lines.push("<!-- /manual -->");
     lines.push("");
   }
 

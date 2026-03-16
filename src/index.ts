@@ -5,12 +5,20 @@ import simpleGit from "simple-git";
 import { glob } from "glob";
 import { analyzeRepo, RepoAnalysis, categorizeProject } from "./analyzer";
 import { generateSkill, scoreSkillQuality, SkillQuality, formatQualityScore, buildStructuredData, SkillStructuredData } from "./generator";
+import { fetchGitHubMetadata, GitHubMetadata, parseOwnerRepo, formatGitHubSection } from "./github-integration";
+import { lintSkillMd, formatLintResult, LintResult } from "./linter";
+import { registryAdd, registryRemove, registryList, registryClear, loadRegistry, saveRegistry, getRegistryPath, RegistryEntry } from "./registry";
+import { getTemplate, listTemplates, isValidTemplate, TemplateConfig, TemplateName } from "./templates";
 
 export interface Repo2SkillOptions {
   outputDir: string;
   skillName?: string;
   /** Path to a specific package within a monorepo (e.g. "packages/core") */
   packagePath?: string;
+  /** Template name: minimal, detailed, security, default */
+  template?: string;
+  /** Fetch GitHub metadata (stars, forks, etc.) */
+  github?: boolean;
 }
 
 export interface Repo2SkillResult {
@@ -79,7 +87,15 @@ export async function repo2skill(
 
     console.log(`⚙️  Generating skill...`);
     const skillDir = path.join(options.outputDir, skillName);
-    const result = generateSkill(analysis, skillDir, skillName, url);
+
+    // Fetch GitHub metadata if requested
+    let githubMeta: GitHubMetadata | null = null;
+    if (options.github !== false) {
+      console.log(`🐙 Fetching GitHub metadata...`);
+      githubMeta = await fetchGitHubMetadata(repo);
+    }
+
+    const result = generateSkill(analysis, skillDir, skillName, url, options.template, githubMeta);
 
     const quality = scoreSkillQuality(analysis);
     result.quality = quality;
@@ -418,3 +434,11 @@ export { analyzeRepo, categorizeProject, extractInstallCommands, extractApiExamp
 export type { RepoAnalysis, BadgeInfo, TOCEntry } from "./analyzer";
 export { scoreSkillQuality, formatQualityScore, buildStructuredData } from "./generator";
 export type { SkillQuality, SkillStructuredData } from "./generator";
+export { fetchGitHubMetadata, parseOwnerRepo, formatGitHubSection } from "./github-integration";
+export type { GitHubMetadata } from "./github-integration";
+export { lintSkillMd, formatLintResult } from "./linter";
+export type { LintResult, LintCheck } from "./linter";
+export { registryAdd, registryRemove, registryList, registryClear, loadRegistry, saveRegistry, getRegistryPath } from "./registry";
+export type { RegistryEntry, Registry } from "./registry";
+export { getTemplate, listTemplates, isValidTemplate } from "./templates";
+export type { TemplateConfig, TemplateName } from "./templates";

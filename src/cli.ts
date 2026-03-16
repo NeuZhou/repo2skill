@@ -2,6 +2,9 @@
 import { Command } from "commander";
 import { repo2skill, repo2skillJson, repo2skillDryRun, upgradeSkill, repo2skillLocal, repo2skillStructured } from "./index";
 import { formatQualityScore, scoreSkillQuality } from "./generator";
+import { lintSkillMd, formatLintResult } from "./linter";
+import { registryAdd, registryRemove, registryList, registryClear } from "./registry";
+import { listTemplates, isValidTemplate } from "./templates";
 import * as path from "path";
 import * as fs from "fs";
 import { execSync } from "child_process";
@@ -11,7 +14,7 @@ const program = new Command();
 program
   .name("repo2skill")
   .description("Convert any GitHub repo into an OpenClaw skill. One command.")
-  .version("2.1.0")
+  .version("2.2.0")
   .argument("[repo]", "GitHub URL or owner/repo (or local path with --local)")
   .option("-o, --output <dir>", "Output directory", "./skills")
   .option("-n, --name <name>", "Override skill name")
@@ -25,6 +28,8 @@ program
   .option("-p, --publish", "Publish to ClawHub after generating")
   .option("-u, --upgrade <skill-dir>", "Re-analyze and regenerate an existing skill, preserving <!-- manual --> sections")
   .option("-l, --local <path>", "Analyze a local directory without cloning")
+  .option("-t, --template <name>", "Template: minimal, detailed, security, default", "default")
+  .option("--no-github", "Skip GitHub API metadata fetching")
   .option("--min-quality <score>", "Skip skills below this quality score (0-100)", parseInt)
   .option("--package <path>", "Target a specific package in a monorepo (e.g. packages/core)")
   .option("--diff <skill-md>", "Compare with existing SKILL.md and show what changed")
@@ -76,6 +81,7 @@ program
         const result = await repo2skillLocal(opts.local, {
           outputDir: path.resolve(opts.output),
           skillName: opts.name,
+          template: opts.template,
         });
         printResult(result, opts.minQuality);
         if (opts.publish && result.skillDir) await publishSkill(result.skillDir);
@@ -119,6 +125,8 @@ program
           outputDir: path.resolve(opts.output),
           skillName: opts.name,
           packagePath: opts.package,
+          template: opts.template,
+          github: opts.github,
         });
         printResult(result, opts.minQuality);
         if (opts.publish && result.skillDir) await publishSkill(result.skillDir);
@@ -325,5 +333,120 @@ async function publishSkill(skillDir: string) {
     console.error(`❌ Publish failed: ${err.message}`);
   }
 }
+
+// Lint subcommand
+program
+  .command("lint <file>")
+  .description("Validate a SKILL.md file and show quality score")
+  .action((file: string) => {
+    const filePath = path.resolve(file);
+    if (!fs.existsSync(filePath)) {
+      console.error(`❌ File not found: ${filePath}`);
+      process.exit(1);
+    }
+    const result = lintSkillMd(filePath);
+    console.log(formatLintResult(result));
+  });
+
+// Registry subcommand
+const registryCmd = program
+  .command("registry")
+  .description("Manage local registry of generated skills");
+
+registryCmd
+  .command("list")
+  .description("List all registered skills")
+  .action(() => {
+    const entries = registryList();
+    if (entries.length === 0) {
+      console.log("\n📋 Registry is empty. Use `repo2skill registry add owner/repo` to add skills.\n");
+      return;
+    }
+    console.log(`\n📋 Registered Skills (${entries.length}):\n`);
+    for (const entry of entries) {
+      console.log(`  ${entry.repo}`);
+      console.log(`    Dir: ${entry.skillDir}`);
+      console.log(`    Generated: ${entry.generatedAt}`);
+      if (entry.template) console.log(`    Template: ${entry.template}`);
+      console.log("");
+    }
+  });
+
+registryCmd
+  .command("add <repo>")
+  .description("Generate a skill and add to registry")
+  .option("-o, --output <dir>", "Output directory", "./skills")
+  .option("-t, --template <name>", "Template name", "default")
+  .action(async (repo: string, opts: any) => {
+    try {
+      const result = await repo2skill(repo, {
+        outputDir: path.resolve(opts.output),
+        template: opts.template,
+      });
+      registryAdd(repo, result.skillDir, opts.template);
+      console.log(`\n✅ Added ${repo} to registry`);
+      printResult(result);
+    } catch (err: any) {
+      console.error(`❌ ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+registryCmd
+  .command("remove <repo>")
+  .description("Remove a skill from registry")
+  .action((repo: string) => {
+    if (registryRemove(repo)) {
+      console.log(`✅ Removed ${repo} from registry`);
+    } else {
+      console.log(`⚠️  ${repo} not found in registry`);
+    }
+  });
+
+registryCmd
+  .command("update-all")
+  .description("Regenerate all skills from latest repo state")
+  .action(async () => {
+    const entries = registryList();
+    if (entries.length === 0) {
+      console.log("📋 Registry is empty.");
+      return;
+    }
+    console.log(`\n🔄 Updating ${entries.length} skill(s)...\n`);
+    for (const entry of entries) {
+      try {
+        console.log(`[${entry.repo}] Regenerating...`);
+        const result = await repo2skill(entry.repo, {
+          outputDir: path.dirname(entry.skillDir),
+          template: entry.template,
+        });
+        registryAdd(entry.repo, result.skillDir, entry.template);
+        console.log(`  ✅ Updated\n`);
+      } catch (err: any) {
+        console.log(`  ❌ ${err.message}\n`);
+      }
+    }
+  });
+
+registryCmd
+  .command("clear")
+  .description("Clear the entire registry")
+  .action(() => {
+    registryClear();
+    console.log("✅ Registry cleared.");
+  });
+
+// Templates subcommand
+program
+  .command("templates")
+  .description("List available SKILL.md templates")
+  .action(() => {
+    const templates = listTemplates();
+    console.log("\n📄 Available Templates:\n");
+    for (const t of templates) {
+      console.log(`  ${t.name.padEnd(12)} ${t.description}`);
+    }
+    console.log("");
+  });
 
 program.parse();
