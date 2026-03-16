@@ -976,7 +976,12 @@ export function categorizeProject(analysis: RepoAnalysis): string {
   const desc = (analysis.richDescription + " " + analysis.description + " " + analysis.readmeFirstParagraph).toLowerCase();
   if (desc.includes("server") || desc.includes("web framework") || desc.includes("web server") || desc.includes("http server") || desc.includes("api framework")) return "server-framework";
   if (/\bcli\b/.test(desc) || desc.includes("command-line") || desc.includes("command line")) return "cli-tool";
-  if (desc.includes("client") || desc.includes("http client") || desc.includes("fetch") || desc.includes("request library")) return "http-client";
+  if (desc.includes("client") || desc.includes("http client") || desc.includes("fetch") || desc.includes("request library")) {
+    // Only categorize as http-client if it's truly an HTTP library, not an SDK/API client
+    if (!/\b(sdk|ai|llm|model|agent|mcp|protocol|langchain|openai|anthropic|cohere|gemini|api client|cloud)\b/i.test(desc)) {
+      return "http-client";
+    }
+  }
   if (desc.includes("framework")) return "framework";
   if (desc.includes("library") || desc.includes("utility") || desc.includes("utilities")) return "library";
   if (desc.includes("tool") || desc.includes("toolkit")) return "tool";
