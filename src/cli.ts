@@ -15,6 +15,11 @@ import { validateSkillMd, formatValidationResult } from "./validator";
 import { testSkill, formatTestResult } from "./skill-test";
 import { publishToMarketplace } from "./marketplace";
 import { aiEnhance, isAiAvailable } from "./ai-enhance";
+import { detectMonorepo, formatMonorepoDetection, packageSkillName } from "./monorepo";
+import { mergeSkills } from "./merge";
+import { convertFormat, formatExtension } from "./formats";
+import { checkSkillHealth, formatHealthResult } from "./health";
+import { extractVersionHistory, formatVersionHistory } from "./versioning";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
@@ -25,7 +30,7 @@ const program = new Command();
 program
   .name("repo2skill")
   .description("Convert any GitHub repo into an OpenClaw skill. One command.")
-  .version("3.1.0")
+  .version("3.2.0")
   .argument("[repo]", "GitHub URL or owner/repo (or local path with --local)")
   .option("-o, --output <dir>", "Output directory", "./skills")
   .option("-n, --name <name>", "Override skill name")
@@ -675,6 +680,72 @@ program
       console.log(`  ${t.name.padEnd(12)} ${t.description}`);
     }
     console.log("");
+  });
+
+// Health check subcommand
+program
+  .command("health <skill-md>")
+  .description("Run a health check on a SKILL.md file")
+  .action((skillMd: string) => {
+    if (!fs.existsSync(skillMd)) {
+      console.error(`File not found: ${skillMd}`);
+      process.exit(1);
+    }
+    const result = checkSkillHealth(skillMd);
+    console.log(`\n${formatHealthResult(result)}\n`);
+  });
+
+// Merge subcommand
+program
+  .command("merge <files...>")
+  .description("Merge multiple SKILL.md files into one")
+  .option("-o, --output <path>", "Output file path")
+  .action((files: string[], opts: any) => {
+    const result = mergeSkills(files, { outputPath: opts.output });
+    if (opts.output) {
+      console.log(`\n✅ Merged ${result.sourceCount} skills → ${opts.output}`);
+      console.log(`   ${result.sectionsmerged} sections, ${result.duplicatesRemoved} duplicates removed\n`);
+    } else {
+      console.log(result.content);
+    }
+  });
+
+// Version subcommand
+program
+  .command("version-info <skill-md>")
+  .description("Show version history of a SKILL.md")
+  .action((skillMd: string) => {
+    if (!fs.existsSync(skillMd)) {
+      console.error(`File not found: ${skillMd}`);
+      process.exit(1);
+    }
+    const content = fs.readFileSync(skillMd, "utf-8");
+    const history = extractVersionHistory(content);
+    // Try to extract current version from frontmatter
+    const commitMatch = content.match(/version_commit:\s*"([^"]+)"/);
+    const dateMatch = content.match(/version_date:\s*"([^"]+)"/);
+    const tagMatch = content.match(/version_tag:\s*"([^"]+)"/);
+    const current = commitMatch ? {
+      commit: commitMatch[1],
+      commitShort: commitMatch[1],
+      date: dateMatch?.[1] || "unknown",
+      tag: tagMatch?.[1],
+    } : null;
+    console.log(`\n${formatVersionHistory(current, history)}\n`);
+  });
+
+// Monorepo subcommand
+program
+  .command("monorepo <path>")
+  .description("Detect and list packages in a monorepo")
+  .action(async (repoPath: string) => {
+    const absPath = path.resolve(repoPath);
+    if (!fs.existsSync(absPath)) {
+      console.error(`Directory not found: ${absPath}`);
+      process.exit(1);
+    }
+    const result = await detectMonorepo(absPath);
+    console.log(`\n${formatMonorepoDetection(result)}\n`);
   });
 
 program.parse();
