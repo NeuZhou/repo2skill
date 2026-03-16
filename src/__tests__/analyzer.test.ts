@@ -33,6 +33,10 @@ function makeAnalysis(overrides: Partial<RepoAnalysis> = {}): RepoAnalysis {
     monorepoPackages: [],
     keyApi: [],
     packageName: "",
+    readmeInstallCommands: [],
+    readmeApiExamples: [],
+    badges: [],
+    toc: [],
     ...overrides,
   };
 }

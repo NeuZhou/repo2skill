@@ -7,6 +7,17 @@ export interface CLICommand {
   description?: string;
 }
 
+export interface BadgeInfo {
+  type: string;   // e.g. "npm", "ci", "coverage", "license", "downloads"
+  label: string;
+  url: string;
+}
+
+export interface TOCEntry {
+  level: number;
+  title: string;
+}
+
 export interface RepoAnalysis {
   name: string;
   description: string;
@@ -42,6 +53,14 @@ export interface RepoAnalysis {
   keyApi: string[];
   /** Actual package name from manifest (may differ from repo name) */
   packageName: string;
+  /** Smart README parsing: install commands extracted from code blocks */
+  readmeInstallCommands: string[];
+  /** Smart README parsing: API examples extracted from code blocks */
+  readmeApiExamples: string[];
+  /** Smart README parsing: badge info extracted from README */
+  badges: BadgeInfo[];
+  /** Smart README parsing: table of contents structure */
+  toc: TOCEntry[];
 }
 
 export async function analyzeRepo(repoDir: string, repoName: string): Promise<RepoAnalysis> {
@@ -74,6 +93,10 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
     monorepoPackages: [],
     keyApi: [],
     packageName: "",
+    readmeInstallCommands: [],
+    readmeApiExamples: [],
+    badges: [],
+    toc: [],
   };
 
   // File tree (top 2 levels)
@@ -177,6 +200,29 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
 
     // Rich description: prefer first meaningful README paragraph over package.json one-liner
     analysis.richDescription = extractRichDescription(analysis.readmeRaw);
+
+    // Smart README parsing: install commands from code blocks
+    analysis.readmeInstallCommands = extractInstallCommands(analysis.readmeRaw);
+
+    // Smart README parsing: API examples from code blocks
+    analysis.readmeApiExamples = extractApiExamples(analysis.readmeRaw);
+
+    // Smart README parsing: badges
+    analysis.badges = extractBadges(analysis.readmeRaw);
+
+    // Smart README parsing: table of contents
+    analysis.toc = extractTOC(analysis.readmeRaw);
+
+    // Use badge info to supplement: license from badge if not found elsewhere
+    if (!analysis.license) {
+      const licenseBadge = analysis.badges.find(b => b.type === "license");
+      if (licenseBadge) analysis.license = licenseBadge.label;
+    }
+
+    // If install instructions empty, try install commands from code blocks
+    if (!analysis.installInstructions && analysis.readmeInstallCommands.length > 0) {
+      analysis.installInstructions = "```bash\n" + analysis.readmeInstallCommands[0] + "\n```";
+    }
   }
 
   // package.json (Node.js)
@@ -1156,6 +1202,117 @@ function extractKeyApi(repoDir: string, analysis: RepoAnalysis, allFiles: string
   }
 
   return exports.slice(0, 10);
+}
+
+/**
+ * Extract install commands from README code blocks.
+ * Looks for common install patterns: npm install, pip install, cargo install, etc.
+ */
+export function extractInstallCommands(readme: string): string[] {
+  const commands: string[] = [];
+  const codeBlockRegex = /```(?:bash|sh|shell|console|zsh|powershell|cmd)?\s*\n([\s\S]*?)```/g;
+  let match;
+  while ((match = codeBlockRegex.exec(readme)) !== null) {
+    const block = match[1];
+    for (const line of block.split("\n")) {
+      const trimmed = line.replace(/^\$\s*/, "").trim();
+      if (/^(?:npm|yarn|pnpm|bun)\s+(?:install|add|i)\s+/i.test(trimmed) ||
+          /^pip3?\s+install\s+/i.test(trimmed) ||
+          /^cargo\s+(?:install|add)\s+/i.test(trimmed) ||
+          /^go\s+(?:install|get)\s+/i.test(trimmed) ||
+          /^gem\s+install\s+/i.test(trimmed) ||
+          /^composer\s+require\s+/i.test(trimmed) ||
+          /^brew\s+install\s+/i.test(trimmed) ||
+          /^apt(?:-get)?\s+install\s+/i.test(trimmed) ||
+          /^dotnet\s+add\s+package\s+/i.test(trimmed) ||
+          /^luarocks\s+install\s+/i.test(trimmed) ||
+          /^mix\s+(?:deps\.get|archive\.install)\s*/i.test(trimmed) ||
+          /^cabal\s+install\s+/i.test(trimmed) ||
+          /^stack\s+install\s+/i.test(trimmed)) {
+        if (!commands.includes(trimmed)) commands.push(trimmed);
+      }
+    }
+  }
+  return commands;
+}
+
+/**
+ * Extract API usage examples from README code blocks.
+ * Looks for code blocks that contain import/require/from statements or function calls.
+ */
+export function extractApiExamples(readme: string): string[] {
+  const examples: string[] = [];
+  const codeBlockRegex = /```(?:js|javascript|ts|typescript|python|py|rust|go|ruby|java|kotlin|swift|dart|elixir|php|csharp|cs|c\+\+|cpp)?\s*\n([\s\S]*?)```/g;
+  let match;
+  while ((match = codeBlockRegex.exec(readme)) !== null) {
+    const block = match[1].trim();
+    // Must contain at least one API-like pattern
+    if (/(?:import\s|require\s*\(|from\s+\S+\s+import|use\s+\w|include\s|#include|using\s)/.test(block) ||
+        /\w+\s*\(/.test(block)) {
+      // Skip pure install/shell commands
+      if (!/^(?:npm|pip|cargo|go|gem|composer|brew|apt|curl|wget)\s/m.test(block)) {
+        examples.push(match[0]);
+      }
+    }
+  }
+  return examples.slice(0, 10);
+}
+
+/**
+ * Extract badge info from README.
+ * Parses common badge patterns like shields.io, img.shields.io, badgen.net.
+ */
+export function extractBadges(readme: string): BadgeInfo[] {
+  const badges: BadgeInfo[] = [];
+  // Match: [![alt](img-url)](link-url) or ![alt](img-url)
+  const badgeRegex = /!?\[!\[([^\]]*)\]\(([^)]+)\)\]\(([^)]+)\)|!\[([^\]]*)\]\(([^)]+)\)/g;
+  let match;
+  while ((match = badgeRegex.exec(readme)) !== null) {
+    const alt = match[1] || match[4] || "";
+    const imgUrl = match[2] || match[5] || "";
+    const linkUrl = match[3] || "";
+
+    // Only process badge-like images (shields.io, badgen, badge URLs)
+    if (!imgUrl.includes("shield") && !imgUrl.includes("badge") && !imgUrl.includes("badgen") &&
+        !imgUrl.includes("coveralls") && !imgUrl.includes("codecov") && !imgUrl.includes("travis") &&
+        !imgUrl.includes("github.com") && !imgUrl.includes("npmjs")) {
+      continue;
+    }
+
+    let type = "other";
+    const combined = (alt + " " + imgUrl + " " + linkUrl).toLowerCase();
+    if (combined.includes("npm") || combined.includes("version")) type = "npm";
+    else if (combined.includes("ci") || combined.includes("build") || combined.includes("action") || combined.includes("travis") || combined.includes("circleci")) type = "ci";
+    else if (combined.includes("coverage") || combined.includes("codecov") || combined.includes("coveralls")) type = "coverage";
+    else if (combined.includes("license")) type = "license";
+    else if (combined.includes("download")) type = "downloads";
+    else if (combined.includes("star")) type = "stars";
+    else if (combined.includes("size") || combined.includes("bundle")) type = "size";
+
+    badges.push({ type, label: alt, url: linkUrl || imgUrl });
+  }
+  return badges;
+}
+
+/**
+ * Extract table of contents structure from README headings.
+ */
+export function extractTOC(readme: string): TOCEntry[] {
+  const entries: TOCEntry[] = [];
+  const lines = readme.split("\n");
+  let inCodeBlock = false;
+  for (const line of lines) {
+    if (line.trim().startsWith("```")) { inCodeBlock = !inCodeBlock; continue; }
+    if (inCodeBlock) continue;
+    const match = line.match(/^(#{1,6})\s+(.+)/);
+    if (match) {
+      entries.push({
+        level: match[1].length,
+        title: match[2].replace(/[^\w\s-]/g, "").trim(),
+      });
+    }
+  }
+  return entries;
 }
 
 function buildFileTree(dir: string, maxDepth: number, prefix = "", depth = 0): string {

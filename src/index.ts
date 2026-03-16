@@ -9,6 +9,8 @@ import { generateSkill, scoreSkillQuality, SkillQuality, formatQualityScore, bui
 export interface Repo2SkillOptions {
   outputDir: string;
   skillName?: string;
+  /** Path to a specific package within a monorepo (e.g. "packages/core") */
+  packagePath?: string;
 }
 
 export interface Repo2SkillResult {
@@ -53,15 +55,19 @@ export async function repo2skill(
   options: Repo2SkillOptions
 ): Promise<Repo2SkillResult> {
   const { url, name: repoName } = parseRepoArg(repo);
-  const skillName = options.skillName || repoName;
+  const skillName = options.skillName || (options.packagePath ? path.basename(options.packagePath) : repoName);
 
   const tmpDir = path.join(os.tmpdir(), `repo2skill-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   console.log(`📦 Cloning ${url}...`);
   await cloneRepo(url, tmpDir);
 
   try {
-    console.log(`🔍 Analyzing repository...`);
-    const analysis = await analyzeRepo(tmpDir, repoName);
+    const analyzeDir = options.packagePath ? path.join(tmpDir, options.packagePath) : tmpDir;
+    if (options.packagePath && !fs.existsSync(analyzeDir)) {
+      throw new Error(`Package path not found: ${options.packagePath}. Available directories: ${fs.readdirSync(tmpDir).join(", ")}`);
+    }
+    console.log(`🔍 Analyzing ${options.packagePath ? `package ${options.packagePath}` : "repository"}...`);
+    const analysis = await analyzeRepo(analyzeDir, skillName);
 
     if (!analysis.readmeRaw && !analysis.description) {
       console.warn(`⚠️  Warning: No README or description found. The generated skill may be sparse.`);
@@ -290,6 +296,106 @@ export async function repo2skillDryRun(repo: string, nameOverride?: string): Pro
   }
 }
 
+export interface DiffChange {
+  field: string;
+  type: "added" | "removed" | "changed";
+  summary: string;
+}
+
+export interface DiffResult {
+  changes: DiffChange[];
+}
+
+export async function diffSkill(
+  repo: string,
+  existingSkillMdPath: string,
+  options?: { packagePath?: string }
+): Promise<DiffResult> {
+  if (!fs.existsSync(existingSkillMdPath)) {
+    throw new Error(`Existing SKILL.md not found: ${existingSkillMdPath}`);
+  }
+
+  const existingContent = fs.readFileSync(existingSkillMdPath, "utf-8");
+
+  const { url, name: repoName } = parseRepoArg(repo);
+  const tmpDir = path.join(os.tmpdir(), `repo2skill-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  await cloneRepo(url, tmpDir);
+
+  try {
+    const analyzeDir = options?.packagePath ? path.join(tmpDir, options.packagePath) : tmpDir;
+    const analysis = await analyzeRepo(analyzeDir, repoName);
+    const category = categorizeProject(analysis);
+    const newData = buildStructuredData(analysis, category);
+
+    const changes: DiffChange[] = [];
+
+    // Compare key fields
+    const compareField = (field: string, extract: (content: string) => string, newVal: string) => {
+      const oldVal = extract(existingContent);
+      if (!oldVal && newVal) {
+        changes.push({ field, type: "added", summary: newVal.slice(0, 80) });
+      } else if (oldVal && !newVal) {
+        changes.push({ field, type: "removed", summary: oldVal.slice(0, 80) });
+      } else if (oldVal !== newVal && oldVal && newVal) {
+        changes.push({ field, type: "changed", summary: `"${oldVal.slice(0, 40)}" → "${newVal.slice(0, 40)}"` });
+      }
+    };
+
+    const extractSection = (content: string, heading: string): string => {
+      const regex = new RegExp(`^##\\s+${heading}\\s*\\n([\\s\\S]*?)(?=^##\\s|$)`, "m");
+      const match = content.match(regex);
+      return match ? match[1].trim() : "";
+    };
+
+    compareField("description", c => {
+      const m = c.match(/^description:\s*(.+)$/m);
+      return m ? m[1].trim() : "";
+    }, newData.description.slice(0, 200));
+
+    // Compare features count
+    const oldFeatures = (existingContent.match(/^- .+$/gm) || []).length;
+    const newFeatures = newData.features.length;
+    if (newFeatures > oldFeatures) {
+      changes.push({ field: "features", type: "added", summary: `${newFeatures - oldFeatures} new feature(s) detected` });
+    } else if (newFeatures < oldFeatures) {
+      changes.push({ field: "features", type: "removed", summary: `${oldFeatures - newFeatures} feature(s) removed` });
+    }
+
+    // Compare CLI commands
+    const oldCli = (existingContent.match(/`\w+`/g) || []).filter(c => c.length > 2);
+    if (newData.cliCommands.length !== oldCli.length) {
+      changes.push({ field: "cliCommands", type: "changed", summary: `${oldCli.length} → ${newData.cliCommands.length} commands` });
+    }
+
+    // Compare quality
+    const oldQualityMatch = existingContent.match(/Quality Score:\s*(\d+)\/(\d+)/);
+    if (oldQualityMatch) {
+      const oldScore = parseInt(oldQualityMatch[1]);
+      if (newData.quality.score !== oldScore) {
+        changes.push({ field: "quality", type: "changed", summary: `${oldScore} → ${newData.quality.score}/${newData.quality.maxScore}` });
+      }
+    }
+
+    // Compare languages
+    const oldLangMatch = existingContent.match(/\*\*Language:\*\*\s*(.+)/);
+    const newLangs = newData.languages.join(", ");
+    if (oldLangMatch && oldLangMatch[1].trim() !== newLangs) {
+      changes.push({ field: "languages", type: "changed", summary: `"${oldLangMatch[1].trim()}" → "${newLangs}"` });
+    }
+
+    // Dependencies
+    const oldDepsMatch = existingContent.match(/\*\*Key dependencies:\*\*\s*(.+)/);
+    const newDeps = newData.dependencies.slice(0, 8).join(", ");
+    if (oldDepsMatch && oldDepsMatch[1].trim() !== newDeps && newDeps) {
+      changes.push({ field: "dependencies", type: "changed", summary: `Dependencies updated` });
+    }
+
+    return { changes };
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
 function printVerbose(analysis: RepoAnalysis) {
   console.log(`\n📋 Analysis Details:`);
   console.log(`   Name:        ${analysis.name}`);
@@ -308,7 +414,7 @@ function printVerbose(analysis: RepoAnalysis) {
 }
 
 // Re-exports
-export { analyzeRepo, categorizeProject } from "./analyzer";
-export type { RepoAnalysis } from "./analyzer";
+export { analyzeRepo, categorizeProject, extractInstallCommands, extractApiExamples, extractBadges, extractTOC } from "./analyzer";
+export type { RepoAnalysis, BadgeInfo, TOCEntry } from "./analyzer";
 export { scoreSkillQuality, formatQualityScore, buildStructuredData } from "./generator";
 export type { SkillQuality, SkillStructuredData } from "./generator";

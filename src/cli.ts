@@ -11,7 +11,7 @@ const program = new Command();
 program
   .name("repo2skill")
   .description("Convert any GitHub repo into an OpenClaw skill. One command.")
-  .version("2.0.0")
+  .version("2.1.0")
   .argument("[repo]", "GitHub URL or owner/repo (or local path with --local)")
   .option("-o, --output <dir>", "Output directory", "./skills")
   .option("-n, --name <name>", "Override skill name")
@@ -26,6 +26,8 @@ program
   .option("-u, --upgrade <skill-dir>", "Re-analyze and regenerate an existing skill, preserving <!-- manual --> sections")
   .option("-l, --local <path>", "Analyze a local directory without cloning")
   .option("--min-quality <score>", "Skip skills below this quality score (0-100)", parseInt)
+  .option("--package <path>", "Target a specific package in a monorepo (e.g. packages/core)")
+  .option("--diff <skill-md>", "Compare with existing SKILL.md and show what changed")
   .action(async (repo: string | undefined, opts: any) => {
     try {
       if (opts.verbose) {
@@ -37,6 +39,23 @@ program
         const result = await upgradeSkill(path.resolve(opts.upgrade));
         console.log(`\n✅ Skill upgraded: ${result.skillDir}`);
         console.log(`   Preserved ${result.manualSectionsPreserved} manual section(s)`);
+        return;
+      }
+
+      // Diff mode
+      if (opts.diff && repo) {
+        const { diffSkill } = await import("./index");
+        const result = await diffSkill(repo, path.resolve(opts.diff), { packagePath: opts.package });
+        console.log(`\n🔍 Diff — ${repo} vs ${opts.diff}\n`);
+        if (result.changes.length === 0) {
+          console.log("  No changes detected.");
+        } else {
+          for (const change of result.changes) {
+            const icon = change.type === "added" ? "+" : change.type === "removed" ? "-" : "~";
+            console.log(`  ${icon} ${change.field}: ${change.summary}`);
+          }
+        }
+        console.log("");
         return;
       }
 
@@ -99,6 +118,7 @@ program
         const result = await repo2skill(repo, {
           outputDir: path.resolve(opts.output),
           skillName: opts.name,
+          packagePath: opts.package,
         });
         printResult(result, opts.minQuality);
         if (opts.publish && result.skillDir) await publishSkill(result.skillDir);
