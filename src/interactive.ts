@@ -1,5 +1,6 @@
 /**
- * Interactive Mode — guided prompts for repo2skill.
+ * Interactive Mode - guided prompts for repo2skill.
+ * v3.4.0: Enhanced with analysis summary display and more options.
  */
 
 import * as readline from "readline";
@@ -9,6 +10,8 @@ export interface InteractiveAnswers {
   format: "markdown" | "json" | "yaml";
   template: "default" | "minimal" | "detailed" | "security";
   includeGithub: boolean;
+  includeExamples: boolean;
+  includeApi: boolean;
 }
 
 function createInterface(): readline.Interface {
@@ -28,22 +31,43 @@ export async function runInteractive(): Promise<InteractiveAnswers> {
   const rl = createInterface();
 
   try {
-    console.log("\n🎯 repo2skill — Interactive Mode\n");
+    console.log("\n🚀 Welcome to repo2skill!\n");
 
-    const repo = await ask(rl, "? Enter repo URL or owner/repo: ");
+    const repo = await ask(rl, "Enter repo URL or path: ");
     if (!repo) throw new Error("No repo provided");
 
-    const formatInput = await ask(rl, "? Output format (markdown/json/yaml) [markdown]: ");
+    console.log(`\nAnalyzing ${repo}...`);
+
+    const formatInput = await ask(rl, "Output format (markdown/json/yaml) [markdown]: ");
     const format = (["markdown", "json", "yaml"].includes(formatInput) ? formatInput : "markdown") as InteractiveAnswers["format"];
 
-    const templateInput = await ask(rl, "? Template (default/minimal/detailed/security) [default]: ");
+    const templateInput = await ask(rl, "Template (default/minimal/detailed/security) [default]: ");
     const template = (["default", "minimal", "detailed", "security"].includes(templateInput) ? templateInput : "default") as InteractiveAnswers["template"];
 
-    const githubInput = await ask(rl, "? Include GitHub metadata? (Y/n): ");
+    const githubInput = await ask(rl, "Include GitHub metadata? (Y/n): ");
     const includeGithub = githubInput.toLowerCase() !== "n";
 
-    return { repo, format, template, includeGithub };
+    const examplesInput = await ask(rl, "Include examples? (Y/n): ");
+    const includeExamples = examplesInput.toLowerCase() !== "n";
+
+    const apiInput = await ask(rl, "Include API reference? (Y/n): ");
+    const includeApi = apiInput.toLowerCase() !== "n";
+
+    console.log("\nGenerating SKILL.md...\n");
+
+    return { repo, format, template, includeGithub, includeExamples, includeApi };
   } finally {
     rl.close();
   }
+}
+
+/**
+ * Display analysis summary during interactive mode.
+ */
+export function displayAnalysisSummary(info: {
+  languages: string[];
+  type: string;
+  commandCount: number;
+}): void {
+  console.log(`  Found: ${info.languages.join(", ")}, ${info.type}, ${info.commandCount} commands`);
 }

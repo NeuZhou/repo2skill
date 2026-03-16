@@ -121,8 +121,8 @@ describe("formatLintResult", () => {
     const fp = writeSkill("---\ndescription: test\n---\n# test\n## When to Use\n- stuff");
     const result = lintSkillMd(fp);
     const formatted = formatLintResult(result);
-    expect(formatted).toContain("✓");
-    expect(formatted).toContain("✗");
+    expect(formatted).toContain("✅");
+    expect(formatted).toContain("❌");
     expect(formatted).toContain("Score:");
   });
 });

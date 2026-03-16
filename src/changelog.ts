@@ -1,5 +1,6 @@
 /**
- * Changelog Generator — generate skill-relevant changelog from git history.
+ * Changelog Generator - generate skill-relevant changelog from git history.
+ * v3.4.0: Added --since tag support.
  */
 
 import simpleGit, { LogResult } from "simple-git";
@@ -18,6 +19,11 @@ export interface Changelog {
   repo: string;
   entries: ChangelogEntry[];
   summary: string;
+}
+
+export interface ChangelogOptions {
+  maxCommits?: number;
+  since?: string; // git tag or date string
 }
 
 const CATEGORY_PATTERNS: [RegExp, ChangelogEntry["category"]][] = [
@@ -41,9 +47,26 @@ export function categorizeCommit(message: string): ChangelogEntry["category"] {
   return "other";
 }
 
-export async function generateChangelog(repoDir: string, maxCommits = 50): Promise<Changelog> {
+export async function generateChangelog(repoDir: string, maxCommits?: number, since?: string): Promise<Changelog> {
   const git = simpleGit(repoDir);
-  const log: LogResult = await git.log({ maxCount: maxCommits });
+
+  const logOpts: Record<string, any> = { maxCount: maxCommits || 50 };
+
+  // If --since is a tag, resolve to the tag's commit date
+  if (since) {
+    try {
+      // Try to resolve as a git tag → get its date
+      const tagDate = await git.raw(["log", "-1", "--format=%aI", since]).then((d) => d.trim());
+      if (tagDate) {
+        logOpts["--after"] = tagDate;
+      }
+    } catch {
+      // If not a valid ref, treat as a date string
+      logOpts["--after"] = since;
+    }
+  }
+
+  const log: LogResult = await git.log(logOpts);
 
   const entries: ChangelogEntry[] = log.all.map((commit) => ({
     hash: commit.hash.slice(0, 7),
@@ -72,7 +95,7 @@ export async function generateChangelog(repoDir: string, maxCommits = 50): Promi
 
 export function formatChangelog(changelog: Changelog): string {
   const lines: string[] = [];
-  lines.push(`\n📋 Changelog — ${changelog.repo}\n`);
+  lines.push(`\n📋 Changelog - ${changelog.repo}\n`);
   lines.push(`  ${changelog.summary}\n`);
 
   const grouped: Record<string, ChangelogEntry[]> = {};

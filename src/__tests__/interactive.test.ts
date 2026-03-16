@@ -8,6 +8,8 @@ describe("InteractiveAnswers type", () => {
       format: "markdown",
       template: "default",
       includeGithub: true,
+      includeExamples: true,
+      includeApi: true,
     };
     expect(answers.repo).toBe("owner/repo");
     expect(answers.format).toBe("markdown");

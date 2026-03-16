@@ -4,14 +4,14 @@ import { repo2skill, repo2skillJson, repo2skillDryRun, upgradeSkill, repo2skillL
 import { formatQualityScore, scoreSkillQuality } from "./generator";
 import { lintSkillMd, formatLintResult } from "./linter";
 import { registryAdd, registryRemove, registryList, registryClear } from "./registry";
-import { listTemplates, isValidTemplate } from "./templates";
+import { listTemplates, isValidTemplate, generateFromTemplate, writeTemplate, isValidSkillType, SKILL_TYPES, SkillType } from "./templates";
 import { checkForUpdates, formatUpdateCheck, checkSkillUpdates, formatSkillUpdateCheck } from "./update-checker";
 import { buildComparisonEntry, formatComparison } from "./compare";
 import { buildSkillGraph, generateGraphHtml, formatGraphSummary } from "./skill-graph";
 import { diffSkillFiles, formatSkillDiff } from "./skill-diff";
 import { buildQualityReport, generateQualityReportHtml, formatQualityReport } from "./quality-report";
 import { loadPlugin, createRepoData, runPlugins, injectPluginSections } from "./plugin";
-import { generateChangelog, formatChangelog } from "./changelog";
+import { generateChangelog, formatChangelog, ChangelogOptions } from "./changelog";
 import { runInteractive } from "./interactive";
 import { analyzeRepo } from "./analyzer";
 import { resolveDependencies, formatDependencies } from "./dependencies";
@@ -34,7 +34,7 @@ const program = new Command();
 program
   .name("repo2skill")
   .description("Convert any GitHub repo into an OpenClaw skill. One command.")
-  .version("3.3.0")
+  .version("3.4.0")
   .argument("[repo]", "GitHub URL or owner/repo (or local path with --local)")
   .option("-o, --output <dir>", "Output directory", "./skills")
   .option("-n, --name <name>", "Override skill name")
@@ -556,6 +556,7 @@ program
   .command("changelog <repo>")
   .description("Generate skill-relevant changelog from git history")
   .option("-n, --max <count>", "Max commits to analyze", parseInt, 50)
+  .option("--since <tag>", "Only include commits after this git tag or date")
   .action(async (repo: string, opts: any) => {
     try {
       const os = require("os");
@@ -574,7 +575,7 @@ program
       }
 
       try {
-        const changelog = await generateChangelog(repoDir, opts.max || 50);
+        const changelog = await generateChangelog(repoDir, opts.max || 50, opts.since);
         console.log(formatChangelog(changelog));
       } finally {
         if (cleanup) fs.rmSync(repoDir, { recursive: true, force: true });
@@ -684,6 +685,28 @@ program
       console.log(`  ${t.name.padEnd(12)} ${t.description}`);
     }
     console.log("");
+  });
+
+// Template scaffold subcommand
+program
+  .command("template")
+  .description("Generate a SKILL.md scaffold from a skill type template")
+  .requiredOption("--type <type>", `Skill type: ${SKILL_TYPES.join(", ")}`)
+  .requiredOption("--name <name>", "Skill name")
+  .option("-o, --output <dir>", "Output directory", "./skills")
+  .action((opts: any) => {
+    try {
+      if (!isValidSkillType(opts.type)) {
+        console.error(`❌ Unknown skill type: "${opts.type}". Available: ${SKILL_TYPES.join(", ")}`);
+        process.exit(1);
+      }
+      const content = generateFromTemplate(opts.type as SkillType, opts.name);
+      const filePath = writeTemplate(opts.output, opts.name, content);
+      console.log(`\n✅ Generated ${opts.type} template: ${filePath}\n`);
+    } catch (err: any) {
+      console.error(`❌ ${err.message}`);
+      process.exit(1);
+    }
   });
 
 // Health check subcommand
