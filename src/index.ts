@@ -4,7 +4,7 @@ import * as os from "os";
 import simpleGit from "simple-git";
 import { glob } from "glob";
 import { analyzeRepo, RepoAnalysis, categorizeProject } from "./analyzer";
-import { generateSkill, scoreSkillQuality, SkillQuality } from "./generator";
+import { generateSkill, scoreSkillQuality, SkillQuality, formatQualityScore, buildStructuredData, SkillStructuredData } from "./generator";
 
 export interface Repo2SkillOptions {
   outputDir: string;
@@ -37,12 +37,10 @@ async function cloneRepo(url: string, tmpDir: string): Promise<void> {
 }
 
 function parseRepoArg(repo: string): { url: string; name: string } {
-  // Full URL
   if (repo.startsWith("http")) {
     const name = repo.replace(/\.git$/, "").split("/").pop()!;
     return { url: repo, name };
   }
-  // owner/repo format
   if (repo.includes("/")) {
     const name = repo.split("/").pop()!;
     return { url: `https://github.com/${repo}`, name };
@@ -57,13 +55,11 @@ export async function repo2skill(
   const { url, name: repoName } = parseRepoArg(repo);
   const skillName = options.skillName || repoName;
 
-  // Clone to temp dir
   const tmpDir = path.join(os.tmpdir(), `repo2skill-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   console.log(`📦 Cloning ${url}...`);
   await cloneRepo(url, tmpDir);
 
   try {
-    // Analyze
     console.log(`🔍 Analyzing repository...`);
     const analysis = await analyzeRepo(tmpDir, repoName);
 
@@ -72,41 +68,22 @@ export async function repo2skill(
     }
 
     if (process.env.REPO2SKILL_VERBOSE === "1") {
-      console.log(`\n📋 Analysis Details:`);
-      console.log(`   Name:        ${analysis.name}`);
-      console.log(`   Package:     ${analysis.packageName || "(none)"}`);
-      console.log(`   Languages:   ${analysis.languages.join(", ") || "unknown"}`);
-      console.log(`   Description: ${(analysis.description || "").slice(0, 100)}${(analysis.description || "").length > 100 ? "..." : ""}`);
-      console.log(`   CLI cmds:    ${analysis.cliCommands.map(c => c.name).join(", ") || "(none)"}`);
-      console.log(`   Features:    ${analysis.features.length}`);
-      console.log(`   Has tests:   ${analysis.hasTests}`);
-      console.log(`   License:     ${analysis.license || "unknown"}`);
-      console.log(`   Monorepo:    ${analysis.isMonorepo}`);
-      console.log(`   Deps:        ${analysis.dependencies.length}`);
-      console.log(`   Examples:    ${analysis.usageExamples.length} code blocks`);
-      console.log(`   Docker:      ${analysis.dockerInfo ? "yes" : "no"}`);
-      console.log("");
+      printVerbose(analysis);
     }
 
-    // Generate
     console.log(`⚙️  Generating skill...`);
     const skillDir = path.join(options.outputDir, skillName);
     const result = generateSkill(analysis, skillDir, skillName, url);
 
-    // Quality scoring
     const quality = scoreSkillQuality(analysis);
     result.quality = quality;
 
     return result;
   } finally {
-    // Cleanup
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 }
 
-/**
- * Analyze a local directory without cloning.
- */
 export async function repo2skillLocal(
   localPath: string,
   options: Repo2SkillOptions
@@ -115,10 +92,17 @@ export async function repo2skillLocal(
   if (!fs.existsSync(resolvedPath)) {
     throw new Error(`Local path not found: ${resolvedPath}`);
   }
+  if (!fs.statSync(resolvedPath).isDirectory()) {
+    throw new Error(`Not a directory: ${resolvedPath}`);
+  }
   const repoName = options.skillName || path.basename(resolvedPath);
 
-  console.log(`🔍 Analyzing local repository at ${resolvedPath}...`);
+  console.log(`🔍 Analyzing local directory: ${resolvedPath}...`);
   const analysis = await analyzeRepo(resolvedPath, repoName);
+
+  if (process.env.REPO2SKILL_VERBOSE === "1") {
+    printVerbose(analysis);
+  }
 
   console.log(`⚙️  Generating skill...`);
   const skillDir = path.join(options.outputDir, repoName);
@@ -137,11 +121,37 @@ export async function repo2skillJson(repo: string): Promise<RepoAnalysis> {
   await cloneRepo(url, tmpDir);
 
   try {
-    const analysis = await analyzeRepo(tmpDir, repoName);
-    return analysis;
+    return await analyzeRepo(tmpDir, repoName);
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
+}
+
+/**
+ * Analyze a repo/local and return structured data (for --format json/yaml).
+ */
+export async function repo2skillStructured(
+  repo: string,
+  options: { local?: boolean }
+): Promise<SkillStructuredData> {
+  let analysis: RepoAnalysis;
+  if (options.local) {
+    const resolvedPath = path.resolve(repo);
+    if (!fs.existsSync(resolvedPath)) throw new Error(`Local path not found: ${resolvedPath}`);
+    const name = path.basename(resolvedPath);
+    analysis = await analyzeRepo(resolvedPath, name);
+  } else {
+    const { url, name } = parseRepoArg(repo);
+    const tmpDir = path.join(os.tmpdir(), `repo2skill-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+    await cloneRepo(url, tmpDir);
+    try {
+      analysis = await analyzeRepo(tmpDir, name);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  }
+  const category = categorizeProject(analysis);
+  return buildStructuredData(analysis, category);
 }
 
 export interface UpgradeResult {
@@ -157,7 +167,6 @@ export async function upgradeSkill(skillDir: string): Promise<UpgradeResult> {
 
   const existingContent = fs.readFileSync(skillMdPath, "utf-8");
 
-  // Extract source_repo from frontmatter
   const sourceRepoMatch = existingContent.match(/^source_repo:\s*(.+)$/m);
   if (!sourceRepoMatch) {
     throw new Error("No source_repo found in SKILL.md frontmatter. Cannot upgrade.");
@@ -169,15 +178,13 @@ export async function upgradeSkill(skillDir: string): Promise<UpgradeResult> {
   const manualSections: { content: string; label: string }[] = [];
   let match;
   while ((match = manualRegex.exec(existingContent)) !== null) {
-    // Find the nearest heading before this manual block
     const before = existingContent.slice(0, match.index);
     const headingMatch = before.match(/^(#{1,3}\s+.+)$/mg);
     const label = headingMatch ? headingMatch[headingMatch.length - 1].trim() : `manual_${manualSections.length}`;
     manualSections.push({ content: match[0], label });
   }
 
-  // Clone and re-analyze
-  const { url, name: repoName } = parseRepoArgPublic(sourceRepo);
+  const { url, name: repoName } = parseRepoArg(sourceRepo);
   const skillName = path.basename(skillDir);
 
   const tmpDir = path.join(os.tmpdir(), `repo2skill-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
@@ -195,13 +202,11 @@ export async function upgradeSkill(skillDir: string): Promise<UpgradeResult> {
     if (manualSections.length > 0) {
       let newContent = fs.readFileSync(skillMdPath, "utf-8");
       for (const section of manualSections) {
-        // Try to find the same heading and append after it
         const headingEscaped = section.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         const headingRegex = new RegExp(`(${headingEscaped}\\n)`);
         if (headingRegex.test(newContent)) {
           newContent = newContent.replace(headingRegex, `$1\n${section.content}\n`);
         } else {
-          // Append before the badge line
           const badgeIdx = newContent.lastIndexOf("> Generated by");
           if (badgeIdx !== -1) {
             newContent = newContent.slice(0, badgeIdx) + section.content + "\n\n" + newContent.slice(badgeIdx);
@@ -217,10 +222,6 @@ export async function upgradeSkill(skillDir: string): Promise<UpgradeResult> {
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
-}
-
-function parseRepoArgPublic(repo: string): { url: string; name: string } {
-  return parseRepoArg(repo);
 }
 
 export interface DryRunResult {
@@ -255,7 +256,6 @@ export async function repo2skillDryRun(repo: string, nameOverride?: string): Pro
     const pkgName = analysis.packageName || analysis.name;
     let installCmd = "";
     if (analysis.installInstructions) {
-      // Extract the actual command from README install instructions
       const cmdMatch = analysis.installInstructions.match(/(?:pip install|npm install|cargo install|go install|gem install|composer require)\s+\S+/);
       installCmd = cmdMatch ? cmdMatch[0] : "(from README)";
     } else if (analysis.language === "JavaScript" || analysis.language === "TypeScript") {
@@ -289,3 +289,26 @@ export async function repo2skillDryRun(repo: string, nameOverride?: string): Pro
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 }
+
+function printVerbose(analysis: RepoAnalysis) {
+  console.log(`\n📋 Analysis Details:`);
+  console.log(`   Name:        ${analysis.name}`);
+  console.log(`   Package:     ${analysis.packageName || "(none)"}`);
+  console.log(`   Languages:   ${analysis.languages.join(", ") || "unknown"}`);
+  console.log(`   Description: ${(analysis.description || "").slice(0, 100)}${(analysis.description || "").length > 100 ? "..." : ""}`);
+  console.log(`   CLI cmds:    ${analysis.cliCommands.map(c => c.name).join(", ") || "(none)"}`);
+  console.log(`   Features:    ${analysis.features.length}`);
+  console.log(`   Has tests:   ${analysis.hasTests}`);
+  console.log(`   License:     ${analysis.license || "unknown"}`);
+  console.log(`   Monorepo:    ${analysis.isMonorepo}`);
+  console.log(`   Deps:        ${analysis.dependencies.length}`);
+  console.log(`   Examples:    ${analysis.usageExamples.length} code blocks`);
+  console.log(`   Docker:      ${analysis.dockerInfo ? "yes" : "no"}`);
+  console.log("");
+}
+
+// Re-exports
+export { analyzeRepo, categorizeProject } from "./analyzer";
+export type { RepoAnalysis } from "./analyzer";
+export { scoreSkillQuality, formatQualityScore, buildStructuredData } from "./generator";
+export type { SkillQuality, SkillStructuredData } from "./generator";

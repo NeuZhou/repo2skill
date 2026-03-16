@@ -1,6 +1,45 @@
 import { describe, it, expect } from "vitest";
 import { stripHtmlTags, extractFirstParagraph, categorizeProject, RepoAnalysis } from "../analyzer";
+import { scoreSkillQuality, formatQualityScore, buildStructuredData } from "../generator";
 
+// Helper to create a test analysis object
+function makeAnalysis(overrides: Partial<RepoAnalysis> = {}): RepoAnalysis {
+  return {
+    name: "test-project",
+    description: "",
+    richDescription: "",
+    whenToUse: [],
+    whenNotToUse: [],
+    triggerPhrases: [],
+    language: "TypeScript",
+    languages: ["TypeScript"],
+    cliCommands: [],
+    installInstructions: "",
+    usageSection: "",
+    usageExamples: [],
+    configSection: "",
+    features: [],
+    apiSection: "",
+    examplesSection: "",
+    readmeRaw: "",
+    readmeFirstParagraph: "",
+    dependencies: [],
+    entryPoints: [],
+    hasTests: false,
+    license: "MIT",
+    sections: {},
+    fileTree: "",
+    isMonorepo: false,
+    monorepoPackages: [],
+    keyApi: [],
+    packageName: "",
+    ...overrides,
+  };
+}
+
+// ============================================================
+// stripHtmlTags
+// ============================================================
 describe("stripHtmlTags", () => {
   it("removes HTML tags", () => {
     expect(stripHtmlTags("<b>hello</b> world")).toBe("hello world");
@@ -31,6 +70,9 @@ describe("stripHtmlTags", () => {
   });
 });
 
+// ============================================================
+// extractFirstParagraph
+// ============================================================
 describe("extractFirstParagraph", () => {
   it("extracts paragraph after heading", () => {
     const readme = "# My Project\n\nThis is the description.\n\nMore stuff.";
@@ -71,41 +113,10 @@ describe("extractFirstParagraph", () => {
   });
 });
 
+// ============================================================
+// categorizeProject
+// ============================================================
 describe("categorizeProject", () => {
-  function makeAnalysis(overrides: Partial<RepoAnalysis>): RepoAnalysis {
-    return {
-      name: "test",
-      description: "",
-      richDescription: "",
-      whenToUse: [],
-      whenNotToUse: [],
-      triggerPhrases: [],
-      language: "typescript",
-      languages: ["typescript"],
-      cliCommands: [],
-      installInstructions: "",
-      usageSection: "",
-      usageExamples: [],
-      apiSection: "",
-      examplesSection: "",
-      readmeRaw: "",
-      readmeFirstParagraph: "",
-      dependencies: [],
-      entryPoints: [],
-      hasTests: false,
-      license: "MIT",
-      sections: {},
-      fileTree: "",
-      configSection: "",
-      features: [],
-      isMonorepo: false,
-      monorepoPackages: [],
-      keyApi: [],
-      packageName: "",
-      ...overrides,
-    };
-  }
-
   it("detects CLI tool", () => {
     expect(categorizeProject(makeAnalysis({ description: "A command-line utility" }))).toBe("cli-tool");
   });
@@ -146,55 +157,44 @@ describe("categorizeProject", () => {
     expect(categorizeProject(makeAnalysis({ description: "A collection of utilities for strings" }))).toBe("library");
   });
 
-  // Ruby gemspec parsing test
   it("handles Ruby gemspec project", () => {
-    const analysis = makeAnalysis({
+    expect(categorizeProject(makeAnalysis({
       description: "A Ruby web framework",
       language: "Ruby",
       languages: ["Ruby"],
-      installInstructions: "gem install rails",
-    });
-    expect(categorizeProject(analysis)).toBe("server-framework");
+    }))).toBe("server-framework");
   });
 
-  // Java/Maven project
   it("handles Java/Maven project", () => {
-    const analysis = makeAnalysis({
+    expect(categorizeProject(makeAnalysis({
       description: "A Java library for JSON processing",
       language: "Java",
       languages: ["Java"],
-      dependencies: ["com.fasterxml.jackson:jackson-core"],
-    });
-    expect(categorizeProject(analysis)).toBe("library");
+    }))).toBe("library");
   });
 
-  // Go project
   it("handles Go CLI project", () => {
-    const analysis = makeAnalysis({
+    expect(categorizeProject(makeAnalysis({
       description: "A Go command-line tool for file management",
       language: "Go",
       languages: ["Go"],
       cliCommands: [{ name: "filetool" }],
-    });
-    expect(categorizeProject(analysis)).toBe("cli-tool");
+    }))).toBe("cli-tool");
   });
 
-  // Monorepo
   it("handles monorepo project", () => {
-    const analysis = makeAnalysis({
+    expect(categorizeProject(makeAnalysis({
       description: "A monorepo utility library",
       isMonorepo: true,
       monorepoPackages: ["core", "cli", "web"],
-    });
-    expect(categorizeProject(analysis)).toBe("library");
+    }))).toBe("library");
   });
 
   it("prefers server-framework over CLI when both present", () => {
-    const analysis = makeAnalysis({
+    expect(categorizeProject(makeAnalysis({
       description: "A web server with CLI utilities",
       cliCommands: [{ name: "serve" }],
-    });
-    expect(categorizeProject(analysis)).toBe("server-framework");
+    }))).toBe("server-framework");
   });
 
   it("detects fetch-based client", () => {
@@ -203,5 +203,238 @@ describe("categorizeProject", () => {
 
   it("detects request library", () => {
     expect(categorizeProject(makeAnalysis({ description: "A request library for Python" }))).toBe("http-client");
+  });
+});
+
+// ============================================================
+// scoreSkillQuality — NEW 100-point scale
+// ============================================================
+describe("scoreSkillQuality", () => {
+  it("returns 0/100 for empty analysis", () => {
+    const q = scoreSkillQuality(makeAnalysis());
+    // Only "Has category" is always 10
+    expect(q.score).toBe(10);
+    expect(q.maxScore).toBe(100);
+  });
+
+  it("gives full score for complete analysis", () => {
+    const q = scoreSkillQuality(makeAnalysis({
+      description: "A great tool",
+      richDescription: "A great tool for doing things",
+      installInstructions: "npm install great-tool",
+      usageExamples: ["```js\nimport x\n```", "```js\nfoo()\n```", "```js\nbar()\n```"],
+      features: ["Fast", "Reliable", "Easy"],
+      apiSection: "## API\nsome docs",
+      keyApi: ["createApp", "run"],
+      whenToUse: ["Build apps"],
+      whenNotToUse: ["Legacy systems"],
+      hasTests: true,
+    }));
+    expect(q.score).toBe(100);
+    expect(q.maxScore).toBe(100);
+  });
+
+  it("partial score for usage examples", () => {
+    const q1 = scoreSkillQuality(makeAnalysis({ usageExamples: ["```\ncode\n```"] }));
+    const q3 = scoreSkillQuality(makeAnalysis({ usageExamples: ["```a```", "```b```", "```c```"] }));
+    // 1 example = 10, 3+ = 15
+    expect(q1.details.find(d => d.label === "Has examples")!.score).toBe(10);
+    expect(q3.details.find(d => d.label === "Has examples")!.score).toBe(15);
+  });
+
+  it("partial score for features", () => {
+    const q1 = scoreSkillQuality(makeAnalysis({ features: ["One"] }));
+    const q3 = scoreSkillQuality(makeAnalysis({ features: ["A", "B", "C"] }));
+    expect(q1.details.find(d => d.label === "Has features list")!.score).toBe(5);
+    expect(q3.details.find(d => d.label === "Has features list")!.score).toBe(10);
+  });
+
+  it("API score from keyApi alone", () => {
+    const q = scoreSkillQuality(makeAnalysis({ keyApi: ["foo", "bar"] }));
+    expect(q.details.find(d => d.label === "Has API reference")!.score).toBe(8);
+  });
+
+  it("API score from apiSection alone", () => {
+    const q = scoreSkillQuality(makeAnalysis({ apiSection: "some api docs" }));
+    expect(q.details.find(d => d.label === "Has API reference")!.score).toBe(10);
+  });
+
+  it("full API score from apiSection + keyApi", () => {
+    const q = scoreSkillQuality(makeAnalysis({ apiSection: "docs", keyApi: ["fn"] }));
+    expect(q.details.find(d => d.label === "Has API reference")!.score).toBe(15);
+  });
+
+  it("legacyScore maps to 1-5 range", () => {
+    const qLow = scoreSkillQuality(makeAnalysis());
+    const qHigh = scoreSkillQuality(makeAnalysis({
+      description: "x", richDescription: "x", installInstructions: "x",
+      usageExamples: ["a", "b", "c"], features: ["a", "b", "c"],
+      apiSection: "x", keyApi: ["x"], whenToUse: ["x"], whenNotToUse: ["x"], hasTests: true,
+    }));
+    expect(qLow.legacyScore).toBeGreaterThanOrEqual(0);
+    expect(qLow.legacyScore).toBeLessThanOrEqual(5);
+    expect(qHigh.legacyScore).toBe(5);
+  });
+});
+
+// ============================================================
+// formatQualityScore
+// ============================================================
+describe("formatQualityScore", () => {
+  it("formats passing items with checkmark", () => {
+    const q = scoreSkillQuality(makeAnalysis({ description: "hello" }));
+    const output = formatQualityScore(q);
+    expect(output).toContain("✓ Has description");
+    expect(output).toContain("📊 Skill Quality Score:");
+  });
+
+  it("formats failing items with ✗", () => {
+    const q = scoreSkillQuality(makeAnalysis());
+    const output = formatQualityScore(q);
+    expect(output).toContain("✗");
+  });
+
+  it("shows score fraction", () => {
+    const q = scoreSkillQuality(makeAnalysis({ description: "x", hasTests: true }));
+    const output = formatQualityScore(q);
+    expect(output).toMatch(/\d+\/100/);
+  });
+});
+
+// ============================================================
+// buildStructuredData
+// ============================================================
+describe("buildStructuredData", () => {
+  it("returns correct structure", () => {
+    const analysis = makeAnalysis({
+      description: "A cool tool",
+      packageName: "cool-tool",
+      features: ["Fast"],
+      whenToUse: ["Build things"],
+      cliCommands: [{ name: "cool" }],
+      hasTests: true,
+    });
+    const data = buildStructuredData(analysis, "cli-tool");
+    expect(data.name).toBe("test-project");
+    expect(data.category).toBe("cli-tool");
+    expect(data.packageName).toBe("cool-tool");
+    expect(data.features).toEqual(["Fast"]);
+    expect(data.cliCommands).toEqual(["cool"]);
+    expect(data.hasTests).toBe(true);
+    expect(data.quality.score).toBeGreaterThan(0);
+    expect(data.quality.maxScore).toBe(100);
+  });
+
+  it("uses name as packageName fallback", () => {
+    const data = buildStructuredData(makeAnalysis(), "library");
+    expect(data.packageName).toBe("test-project");
+  });
+
+  it("includes all fields", () => {
+    const data = buildStructuredData(makeAnalysis(), "library");
+    const keys = Object.keys(data);
+    expect(keys).toContain("name");
+    expect(keys).toContain("description");
+    expect(keys).toContain("language");
+    expect(keys).toContain("languages");
+    expect(keys).toContain("category");
+    expect(keys).toContain("features");
+    expect(keys).toContain("whenToUse");
+    expect(keys).toContain("whenNotToUse");
+    expect(keys).toContain("cliCommands");
+    expect(keys).toContain("installCommand");
+    expect(keys).toContain("quality");
+  });
+});
+
+// ============================================================
+// Edge cases & integration-like tests
+// ============================================================
+describe("edge cases", () => {
+  it("categorize: SDK/AI project is NOT http-client", () => {
+    const a = makeAnalysis({ description: "An SDK client for OpenAI API" });
+    expect(categorizeProject(a)).not.toBe("http-client");
+  });
+
+  it("categorize: MCP protocol project is NOT http-client", () => {
+    const a = makeAnalysis({ description: "A client for MCP protocol servers" });
+    expect(categorizeProject(a)).not.toBe("http-client");
+  });
+
+  it("quality: usageSection without code blocks gives partial score", () => {
+    const q = scoreSkillQuality(makeAnalysis({ usageSection: "Just run the command and see results" }));
+    expect(q.details.find(d => d.label === "Has examples")!.score).toBe(5);
+  });
+
+  it("handles analysis with all empty strings", () => {
+    const a = makeAnalysis({
+      name: "",
+      description: "",
+      language: "unknown",
+      languages: [],
+    });
+    const cat = categorizeProject(a);
+    expect(cat).toBe("library");
+    const q = scoreSkillQuality(a);
+    expect(q.score).toBe(10); // only category
+  });
+
+  it("handles analysis with very long description", () => {
+    const longDesc = "x".repeat(10000);
+    const a = makeAnalysis({ description: longDesc, richDescription: longDesc });
+    const q = scoreSkillQuality(a);
+    expect(q.details.find(d => d.label === "Has description")!.pass).toBe(true);
+  });
+
+  it("handles multiple CLI commands in categorization", () => {
+    const a = makeAnalysis({
+      cliCommands: [{ name: "build" }, { name: "serve" }, { name: "test" }],
+    });
+    expect(categorizeProject(a)).toBe("cli-tool");
+  });
+
+  it("extractFirstParagraph handles only badges", () => {
+    const readme = "# Title\n\n[![badge](url)](link)\n[![b2](u2)](l2)\n";
+    expect(extractFirstParagraph(readme)).toBe("");
+  });
+
+  it("extractFirstParagraph handles inline HTML", () => {
+    expect(extractFirstParagraph("# T\n\nHello <em>world</em> foo.")).toBe("Hello world foo.");
+  });
+});
+
+// ============================================================
+// Quality scoring edge cases
+// ============================================================
+describe("quality scoring edge cases", () => {
+  it("no whenNotToUse gives 0 for that criterion", () => {
+    const q = scoreSkillQuality(makeAnalysis({ whenToUse: ["x"], whenNotToUse: [] }));
+    expect(q.details.find(d => d.label === 'Has "When NOT to Use"')!.score).toBe(0);
+  });
+
+  it("hasTests gives 10 points", () => {
+    const q = scoreSkillQuality(makeAnalysis({ hasTests: true }));
+    expect(q.details.find(d => d.label === "Has test examples")!.score).toBe(10);
+  });
+
+  it("no tests gives 0 points for test criterion", () => {
+    const q = scoreSkillQuality(makeAnalysis({ hasTests: false }));
+    expect(q.details.find(d => d.label === "Has test examples")!.score).toBe(0);
+  });
+
+  it("category always scores 10", () => {
+    const q = scoreSkillQuality(makeAnalysis());
+    expect(q.details.find(d => d.label === "Has category")!.score).toBe(10);
+  });
+
+  it("quality details has 9 criteria", () => {
+    const q = scoreSkillQuality(makeAnalysis());
+    expect(q.details.length).toBe(9);
+  });
+
+  it("maxScore sums to 100", () => {
+    const q = scoreSkillQuality(makeAnalysis());
+    const sum = q.details.reduce((s, d) => s + d.maxScore, 0);
+    expect(sum).toBe(100);
   });
 });

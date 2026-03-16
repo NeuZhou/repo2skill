@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { repo2skill, repo2skillJson, repo2skillDryRun, upgradeSkill, repo2skillLocal } from "./index";
+import { repo2skill, repo2skillJson, repo2skillDryRun, upgradeSkill, repo2skillLocal, repo2skillStructured } from "./index";
+import { formatQualityScore, scoreSkillQuality } from "./generator";
 import * as path from "path";
 import * as fs from "fs";
 import { execSync } from "child_process";
@@ -10,36 +11,49 @@ const program = new Command();
 program
   .name("repo2skill")
   .description("Convert any GitHub repo into an OpenClaw skill. One command.")
-  .version("1.9.0")
-  .argument("[repo]", "GitHub URL or owner/repo")
+  .version("2.0.0")
+  .argument("[repo]", "GitHub URL or owner/repo (or local path with --local)")
   .option("-o, --output <dir>", "Output directory", "./skills")
   .option("-n, --name <name>", "Override skill name")
   .option("-b, --batch <file>", "Batch mode: file with one repo URL per line")
-  .option("-j, --json", "Output analysis as JSON instead of generating files")
+  .option("--parallel <count>", "Parallel workers for batch mode (default: 1)", parseInt)
+  .option("-f, --format <type>", "Output format: markdown (default), json, yaml", "markdown")
+  .option("-j, --json", "Output analysis as JSON (shorthand for --format json)")
   .option("-d, --dry-run", "Preview what would be generated without writing files")
   .option("-v, --verbose", "Show detailed analysis during generation")
   .option("-s, --stats", "Show aggregate stats of generated skills in output directory")
   .option("-p, --publish", "Publish to ClawHub after generating")
   .option("-u, --upgrade <skill-dir>", "Re-analyze and regenerate an existing skill, preserving <!-- manual --> sections")
-  .option("-l, --local <path>", "Analyze a local repo without cloning")
-  .option("--min-quality <score>", "Skip skills below this quality score (1-5)", parseInt)
-  .action(async (repo: string | undefined, opts: { output: string; name?: string; batch?: string; json?: boolean; dryRun?: boolean; verbose?: boolean; stats?: boolean; publish?: boolean; upgrade?: string; local?: string; minQuality?: number }) => {
+  .option("-l, --local <path>", "Analyze a local directory without cloning")
+  .option("--min-quality <score>", "Skip skills below this quality score (0-100)", parseInt)
+  .action(async (repo: string | undefined, opts: any) => {
     try {
-      // Set verbose mode globally
       if (opts.verbose) {
         process.env.REPO2SKILL_VERBOSE = "1";
       }
+
+      // Upgrade mode
       if (opts.upgrade) {
         const result = await upgradeSkill(path.resolve(opts.upgrade));
         console.log(`\n✅ Skill upgraded: ${result.skillDir}`);
         console.log(`   Preserved ${result.manualSectionsPreserved} manual section(s)`);
         return;
       }
+
+      // Stats mode
       if (opts.stats) {
         showStats(path.resolve(opts.output));
         return;
       }
+
+      // Local mode
       if (opts.local) {
+        const format = opts.json ? "json" : opts.format;
+        if (format === "json" || format === "yaml") {
+          const data = await repo2skillStructured(opts.local, { local: true });
+          outputStructured(data, format);
+          return;
+        }
         const result = await repo2skillLocal(opts.local, {
           outputDir: path.resolve(opts.output),
           skillName: opts.name,
@@ -48,11 +62,15 @@ program
         if (opts.publish && result.skillDir) await publishSkill(result.skillDir);
         return;
       }
-      if (opts.json && repo) {
-        const result = await repo2skillJson(repo);
-        console.log(JSON.stringify(result, null, 2));
+
+      // JSON/structured format without writing files
+      if ((opts.json || opts.format === "json" || opts.format === "yaml") && repo && !opts.batch) {
+        const data = await repo2skillStructured(repo, { local: false });
+        outputStructured(data, opts.json ? "json" : opts.format);
         return;
       }
+
+      // Dry run
       if (opts.dryRun && repo) {
         const result = await repo2skillDryRun(repo, opts.name);
         console.log(`\n🔍 Dry Run — ${repo}\n`);
@@ -73,8 +91,10 @@ program
         console.log("");
         return;
       }
+
+      // Batch mode
       if (opts.batch) {
-        await runBatch(opts.batch, opts.output, opts.minQuality);
+        await runBatch(opts.batch, opts.output, opts.parallel || 1, opts.minQuality);
       } else if (repo) {
         const result = await repo2skill(repo, {
           outputDir: path.resolve(opts.output),
@@ -92,22 +112,63 @@ program
     }
   });
 
-function printResult(result: { skillDir: string; referencesCount: number; quality?: { score: number; details: Record<string, boolean> } }, minQuality?: number) {
+function outputStructured(data: any, format: string) {
+  if (format === "yaml") {
+    console.log(toYaml(data));
+  } else {
+    console.log(JSON.stringify(data, null, 2));
+  }
+}
+
+function toYaml(obj: any, indent = 0): string {
+  const prefix = "  ".repeat(indent);
+  const lines: string[] = [];
+  for (const [key, value] of Object.entries(obj)) {
+    if (value === null || value === undefined) {
+      lines.push(`${prefix}${key}: null`);
+    } else if (Array.isArray(value)) {
+      if (value.length === 0) {
+        lines.push(`${prefix}${key}: []`);
+      } else if (typeof value[0] === "object") {
+        lines.push(`${prefix}${key}:`);
+        for (const item of value) {
+          lines.push(`${prefix}- ${toYaml(item, indent + 1).trimStart()}`);
+        }
+      } else {
+        lines.push(`${prefix}${key}:`);
+        for (const item of value) {
+          lines.push(`${prefix}  - ${JSON.stringify(item)}`);
+        }
+      }
+    } else if (typeof value === "object") {
+      lines.push(`${prefix}${key}:`);
+      lines.push(toYaml(value, indent + 1));
+    } else if (typeof value === "string" && (value.includes("\n") || value.includes(":"))) {
+      lines.push(`${prefix}${key}: ${JSON.stringify(value)}`);
+    } else {
+      lines.push(`${prefix}${key}: ${value}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+function printResult(result: { skillDir: string; referencesCount: number; quality?: any }, minQuality?: number) {
   console.log(`\n✅ Skill generated: ${result.skillDir}`);
   console.log(`   SKILL.md: ${path.join(result.skillDir, "SKILL.md")}`);
   if (result.referencesCount > 0) {
     console.log(`   References: ${result.referencesCount} file(s)`);
   }
   if (result.quality) {
-    console.log(`   ⭐ Skill quality: ${result.quality.score}/5`);
+    console.log("");
+    console.log(formatQualityScore(result.quality));
     if (minQuality && result.quality.score < minQuality) {
-      console.log(`   ⚠️  Below minimum quality (${minQuality}). Removing...`);
+      console.log(`\n   ⚠️  Below minimum quality (${minQuality}/${result.quality.maxScore}). Removing...`);
       fs.rmSync(result.skillDir, { recursive: true, force: true });
     }
   }
 }
 
-async function runBatch(batchFile: string, outputDir: string, minQuality?: number) {
+async function runBatch(batchFile: string, outputDir: string, parallel: number, minQuality?: number) {
   const filePath = path.resolve(batchFile);
   if (!fs.existsSync(filePath)) {
     throw new Error(`Batch file not found: ${filePath}`);
@@ -116,37 +177,68 @@ async function runBatch(batchFile: string, outputDir: string, minQuality?: numbe
   const lines = fs.readFileSync(filePath, "utf-8")
     .split("\n")
     .map(l => l.trim())
-    .filter(l => l && !l.startsWith("#")); // Skip empty lines and comments
+    .filter(l => l && !l.startsWith("#"));
 
-  console.log(`📋 Batch mode: ${lines.length} repo(s) from ${batchFile}\n`);
+  console.log(`📋 Batch mode: ${lines.length} repo(s) from ${batchFile} (parallel: ${parallel})\n`);
 
-  const results: { repo: string; status: string; dir?: string }[] = [];
+  const results: { repo: string; status: string; dir?: string; quality?: number }[] = [];
 
-  for (let i = 0; i < lines.length; i++) {
-    const repo = lines[i];
-    console.log(`[${i + 1}/${lines.length}] Processing: ${repo}`);
-    try {
-      const result = await repo2skill(repo, {
-        outputDir: path.resolve(outputDir),
-      });
-      results.push({ repo, status: "✅", dir: result.skillDir });
-      const qStr = result.quality ? ` (⭐ ${result.quality.score}/5)` : "";
-      console.log(`  ✅ → ${result.skillDir}${qStr}\n`);
-      if (minQuality && result.quality && result.quality.score < minQuality) {
-        console.log(`  ⚠️  Below min quality (${minQuality}). Removing.\n`);
-        fs.rmSync(result.skillDir, { recursive: true, force: true });
-        results[results.length - 1].status = "⚠️";
+  if (parallel <= 1) {
+    // Sequential
+    for (let i = 0; i < lines.length; i++) {
+      const repo = lines[i];
+      console.log(`[${i + 1}/${lines.length}] Processing: ${repo}`);
+      try {
+        const result = await repo2skill(repo, { outputDir: path.resolve(outputDir) });
+        const qScore = result.quality?.score ?? 0;
+        results.push({ repo, status: "✅", dir: result.skillDir, quality: qScore });
+        console.log(`  ✅ → ${result.skillDir} (${qScore}/${result.quality?.maxScore ?? 100})\n`);
+        if (minQuality && qScore < minQuality) {
+          console.log(`  ⚠️  Below min quality (${minQuality}). Removing.\n`);
+          fs.rmSync(result.skillDir, { recursive: true, force: true });
+          results[results.length - 1].status = "⚠️";
+        }
+      } catch (err: any) {
+        results.push({ repo, status: "❌" });
+        console.log(`  ❌ ${err.message}\n`);
       }
-    } catch (err: any) {
-      results.push({ repo, status: "❌" });
-      console.log(`  ❌ ${err.message}\n`);
+    }
+  } else {
+    // Parallel execution
+    const chunks: string[][] = [];
+    for (let i = 0; i < lines.length; i += parallel) {
+      chunks.push(lines.slice(i, i + parallel));
+    }
+
+    let processed = 0;
+    for (const chunk of chunks) {
+      const promises = chunk.map(async (repo) => {
+        processed++;
+        console.log(`[${processed}/${lines.length}] Processing: ${repo}`);
+        try {
+          const result = await repo2skill(repo, { outputDir: path.resolve(outputDir) });
+          const qScore = result.quality?.score ?? 0;
+          results.push({ repo, status: "✅", dir: result.skillDir, quality: qScore });
+          console.log(`  ✅ → ${result.skillDir} (${qScore}/${result.quality?.maxScore ?? 100})`);
+          if (minQuality && qScore < minQuality) {
+            console.log(`  ⚠️  Below min quality (${minQuality}). Removing.`);
+            fs.rmSync(result.skillDir, { recursive: true, force: true });
+            results[results.length - 1].status = "⚠️";
+          }
+        } catch (err: any) {
+          results.push({ repo, status: "❌" });
+          console.log(`  ❌ ${repo}: ${err.message}`);
+        }
+      });
+      await Promise.all(promises);
     }
   }
 
   // Summary
   const success = results.filter(r => r.status === "✅").length;
   const failed = results.filter(r => r.status === "❌").length;
-  console.log(`\n📊 Batch complete: ${success} succeeded, ${failed} failed out of ${lines.length}`);
+  const skipped = results.filter(r => r.status === "⚠️").length;
+  console.log(`\n📊 Batch complete: ${success} succeeded, ${failed} failed, ${skipped} skipped (low quality) out of ${lines.length}`);
 }
 
 function showStats(outputDir: string) {
@@ -170,7 +262,6 @@ function showStats(outputDir: string) {
     const content = fs.readFileSync(skillMdPath, "utf-8");
     totalSize += content.length;
 
-    // Extract language from "**Language:** ..." line
     const langMatch = content.match(/\*\*Language:\*\*\s*(.+)/);
     if (langMatch) {
       const langs = langMatch[1].split(",").map(l => l.trim());

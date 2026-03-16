@@ -3,27 +3,95 @@ import * as fs from "fs";
 import { RepoAnalysis } from "./analyzer";
 import { Repo2SkillResult } from "./index";
 
+export interface SkillQualityDetail {
+  label: string;
+  score: number;
+  maxScore: number;
+  pass: boolean;
+}
+
 export interface SkillQuality {
   score: number;
-  details: {
-    hasDescription: boolean;
-    hasUsageExamples: boolean;
-    hasInstallInstructions: boolean;
-    hasWhenToUse: boolean;
-    hasKeyApiOrFeatures: boolean;
-  };
+  maxScore: number;
+  details: SkillQualityDetail[];
+  /** Legacy 1-5 score for backward compat */
+  legacyScore: number;
 }
 
 export function scoreSkillQuality(analysis: RepoAnalysis): SkillQuality {
-  const details = {
-    hasDescription: !!(analysis.richDescription || analysis.description),
-    hasUsageExamples: analysis.usageExamples.length > 0 || !!analysis.usageSection,
-    hasInstallInstructions: !!analysis.installInstructions,
-    hasWhenToUse: analysis.whenToUse.length > 0 || analysis.whenNotToUse.length > 0,
-    hasKeyApiOrFeatures: analysis.keyApi.length > 0 || analysis.features.length > 0,
-  };
-  const score = Object.values(details).filter(Boolean).length;
-  return { score, details };
+  const details: SkillQualityDetail[] = [
+    {
+      label: "Has description",
+      score: (analysis.richDescription || analysis.description) ? 10 : 0,
+      maxScore: 10,
+      pass: !!(analysis.richDescription || analysis.description),
+    },
+    {
+      label: "Has install command",
+      score: analysis.installInstructions ? 10 : 0,
+      maxScore: 10,
+      pass: !!analysis.installInstructions,
+    },
+    {
+      label: "Has examples",
+      score: analysis.usageExamples.length >= 3 ? 15 : analysis.usageExamples.length >= 1 ? 10 : analysis.usageSection ? 5 : 0,
+      maxScore: 15,
+      pass: analysis.usageExamples.length > 0 || !!analysis.usageSection,
+    },
+    {
+      label: "Has features list",
+      score: analysis.features.length >= 3 ? 10 : analysis.features.length >= 1 ? 5 : 0,
+      maxScore: 10,
+      pass: analysis.features.length > 0,
+    },
+    {
+      label: "Has API reference",
+      score: analysis.apiSection ? (analysis.keyApi.length > 0 ? 15 : 10) : analysis.keyApi.length > 0 ? 8 : 0,
+      maxScore: 15,
+      pass: !!(analysis.apiSection || analysis.keyApi.length > 0),
+    },
+    {
+      label: 'Has "When to Use"',
+      score: analysis.whenToUse.length > 0 ? 10 : 0,
+      maxScore: 10,
+      pass: analysis.whenToUse.length > 0,
+    },
+    {
+      label: 'Has "When NOT to Use"',
+      score: analysis.whenNotToUse.length > 0 ? 10 : 0,
+      maxScore: 10,
+      pass: analysis.whenNotToUse.length > 0,
+    },
+    {
+      label: "Has category",
+      score: 10, // always detected
+      maxScore: 10,
+      pass: true,
+    },
+    {
+      label: "Has test examples",
+      score: analysis.hasTests ? 10 : 0,
+      maxScore: 10,
+      pass: analysis.hasTests,
+    },
+  ];
+
+  const score = details.reduce((sum, d) => sum + d.score, 0);
+  const maxScore = details.reduce((sum, d) => sum + d.maxScore, 0);
+  const legacyScore = Math.round((score / maxScore) * 5);
+
+  return { score, maxScore, details, legacyScore };
+}
+
+export function formatQualityScore(quality: SkillQuality): string {
+  const lines: string[] = [];
+  lines.push(`📊 Skill Quality Score: ${quality.score}/${quality.maxScore}`);
+  for (const d of quality.details) {
+    const icon = d.pass ? "✓" : "✗";
+    const label = d.pass ? d.label : `Missing ${d.label.replace(/^Has /, "").toLowerCase()}`;
+    lines.push(`  ${icon} ${label} (${d.score}/${d.maxScore})`);
+  }
+  return lines.join("\n");
 }
 
 export function generateSkill(
@@ -73,24 +141,67 @@ ${body}
   return { skillDir, referencesCount };
 }
 
+export interface SkillStructuredData {
+  name: string;
+  description: string;
+  language: string;
+  languages: string[];
+  category: string;
+  features: string[];
+  whenToUse: string[];
+  whenNotToUse: string[];
+  cliCommands: string[];
+  installCommand: string;
+  packageName: string;
+  license: string;
+  hasTests: boolean;
+  isMonorepo: boolean;
+  monorepoPackages: string[];
+  dependencies: string[];
+  keyApi: string[];
+  usageExamples: string[];
+  quality: { score: number; maxScore: number };
+}
+
+export function buildStructuredData(analysis: RepoAnalysis, category: string): SkillStructuredData {
+  const quality = scoreSkillQuality(analysis);
+  return {
+    name: analysis.name,
+    description: analysis.richDescription || analysis.description,
+    language: analysis.language,
+    languages: analysis.languages,
+    category,
+    features: analysis.features,
+    whenToUse: analysis.whenToUse,
+    whenNotToUse: analysis.whenNotToUse,
+    cliCommands: analysis.cliCommands.map(c => c.name),
+    installCommand: analysis.installInstructions || "",
+    packageName: analysis.packageName || analysis.name,
+    license: analysis.license,
+    hasTests: analysis.hasTests,
+    isMonorepo: analysis.isMonorepo,
+    monorepoPackages: analysis.monorepoPackages,
+    dependencies: analysis.dependencies,
+    keyApi: analysis.keyApi,
+    usageExamples: analysis.usageExamples,
+    quality: { score: quality.score, maxScore: quality.maxScore },
+  };
+}
+
 function buildDescription(analysis: RepoAnalysis, isCLI: boolean): string {
   const parts: string[] = [];
 
-  // Use rich description when available, otherwise core description
   const desc = analysis.richDescription || analysis.description || `${analysis.name} — a ${analysis.language} project.`;
   parts.push(desc.split("\n")[0].replace(/\n/g, " ").trim());
 
-  // When to use (inline)
   if (analysis.whenToUse.length > 0) {
     parts.push(`WHEN: ${analysis.whenToUse.slice(0, 4).join(", ").toLowerCase()}.`);
   }
 
-  // Trigger phrases
   if (analysis.triggerPhrases.length > 0) {
     parts.push(`Triggers: ${analysis.triggerPhrases.slice(0, 4).join(", ")}.`);
   }
 
-  // Truncate frontmatter description to 200 chars for conciseness
   const full = parts.join(" ").replace(/"/g, '\\"');
   return full.slice(0, 200);
 }
@@ -101,7 +212,6 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
   lines.push(`# ${skillName}`);
   lines.push("");
 
-  // Rich description
   if (analysis.richDescription) {
     lines.push(analysis.richDescription.split("\n")[0]);
     lines.push("");
@@ -110,7 +220,6 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
     lines.push("");
   }
 
-  // When to Use / When NOT to Use
   lines.push("## When to Use");
   lines.push("");
   if (analysis.whenToUse.length > 0) {
@@ -133,11 +242,9 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
     lines.push("");
   }
 
-  // Quick Start (installation + basic usage combined)
   lines.push("## Quick Start");
   lines.push("");
 
-  // Installation
   if (analysis.installInstructions) {
     const codeBlocks = extractCodeBlocks(analysis.installInstructions);
     if (codeBlocks.length > 0) {
@@ -195,19 +302,15 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
     lines.push("");
   }
 
-  // Basic usage examples
   if (analysis.usageExamples.length > 0) {
     lines.push("### Basic Usage");
     lines.push("");
-    // Show up to 3 code examples, track them for dedup
     const usedBlocks = new Set<string>();
     for (const example of analysis.usageExamples.slice(0, 3)) {
       usedBlocks.add(example);
       lines.push(example);
       lines.push("");
     }
-
-    // Store for later dedup in Examples section
     (analysis as any)._usedCodeBlocks = usedBlocks;
   } else if (analysis.usageSection) {
     lines.push("### Basic Usage");
@@ -216,7 +319,6 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
     lines.push("");
   }
 
-  // CLI Commands
   if (isCLI && analysis.cliCommands.length > 0) {
     lines.push("## CLI Commands");
     lines.push("");
@@ -226,7 +328,6 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
     lines.push("");
   }
 
-  // Features (top 5)
   if (analysis.features.length > 0) {
     lines.push("## Key Features");
     lines.push("");
@@ -236,7 +337,6 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
     lines.push("");
   }
 
-  // Configuration
   if (analysis.configSection) {
     const configBlocks = extractCodeBlocks(analysis.configSection);
     if (configBlocks.length > 0) {
@@ -247,7 +347,6 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
     }
   }
 
-  // Monorepo info
   if (analysis.isMonorepo && analysis.monorepoPackages.length > 0) {
     lines.push("## Packages");
     lines.push("");
@@ -262,10 +361,8 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
     lines.push("");
   }
 
-  // Examples section (if separate from usage, with dedup)
   if (analysis.examplesSection && analysis.examplesSection !== analysis.usageSection) {
     const usedBlocks: Set<string> = (analysis as any)._usedCodeBlocks || new Set();
-    // Remove code blocks that were already shown in Quick Start
     let dedupedExamples = analysis.examplesSection;
     for (const block of usedBlocks) {
       dedupedExamples = dedupedExamples.replace(block, "");
@@ -279,7 +376,6 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
     }
   }
 
-  // API (brief, point to references)
   if (analysis.apiSection) {
     lines.push("## API");
     lines.push("");
@@ -293,7 +389,6 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
     lines.push("");
   }
 
-  // Key API
   if (analysis.keyApi.length > 0) {
     lines.push("## Key API");
     lines.push("");
@@ -303,7 +398,6 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
     lines.push("");
   }
 
-  // Docker info
   if (analysis.dockerInfo) {
     lines.push("## Docker");
     lines.push("");
@@ -317,7 +411,6 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
     lines.push("");
   }
 
-  // Project Info
   lines.push("## Project Info");
   lines.push("");
   lines.push(`- **Language:** ${analysis.languages.join(", ") || "Unknown"}`);
@@ -328,7 +421,6 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
   }
   lines.push("");
 
-  // File Structure
   if (analysis.fileTree) {
     lines.push("## File Structure");
     lines.push("");
@@ -340,9 +432,6 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
   return ensureClosedCodeBlocks(lines.join("\n"));
 }
 
-/**
- * Ensure all fenced code blocks are properly closed.
- */
 function ensureClosedCodeBlocks(markdown: string): string {
   let inBlock = false;
   for (const line of markdown.split("\n")) {

@@ -201,8 +201,8 @@ describe("scoreSkillQuality", () => {
     writeFile(repoDir, "index.js", "");
     const analysis = await analyzeRepo(repoDir, "q");
     const q = scoreSkillQuality(analysis);
-    expect(q.score).toBeGreaterThanOrEqual(3);
-    expect(q.details.hasDescription).toBe(true);
+    expect(q.score).toBeGreaterThanOrEqual(30);
+    expect(q.details.find((d: any) => d.label === "Has description")!.pass).toBe(true);
     fs.rmSync(repoDir, { recursive: true, force: true });
   });
 
@@ -211,7 +211,7 @@ describe("scoreSkillQuality", () => {
     writeFile(repoDir, "main.c", "int main() { return 0; }");
     const analysis = await analyzeRepo(repoDir, "minimal");
     const q = scoreSkillQuality(analysis);
-    expect(q.score).toBeLessThanOrEqual(2);
+    expect(q.score).toBeLessThanOrEqual(30);
     fs.rmSync(repoDir, { recursive: true, force: true });
   });
 });
