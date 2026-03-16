@@ -10,8 +10,11 @@ import { buildComparisonEntry, formatComparison } from "./compare";
 import { generateChangelog, formatChangelog } from "./changelog";
 import { runInteractive } from "./interactive";
 import { analyzeRepo } from "./analyzer";
+import { resolveDependencies, formatDependencies } from "./dependencies";
+import { validateSkillMd, formatValidationResult } from "./validator";
 import * as path from "path";
 import * as fs from "fs";
+import * as os from "os";
 import { execSync } from "child_process";
 
 const program = new Command();
@@ -19,7 +22,7 @@ const program = new Command();
 program
   .name("repo2skill")
   .description("Convert any GitHub repo into an OpenClaw skill. One command.")
-  .version("2.3.0")
+  .version("2.4.0")
   .argument("[repo]", "GitHub URL or owner/repo (or local path with --local)")
   .option("-o, --output <dir>", "Output directory", "./skills")
   .option("-n, --name <name>", "Override skill name")
@@ -38,6 +41,8 @@ program
   .option("--min-quality <score>", "Skip skills below this quality score (0-100)", parseInt)
   .option("--package <path>", "Target a specific package in a monorepo (e.g. packages/core)")
   .option("--diff <skill-md>", "Compare with existing SKILL.md and show what changed")
+  .option("--show-deps", "Show dependency report for a repo")
+  .option("--version-tag <tag>", "Pin skill to a specific git tag")
   .option("--check-updates", "Check for newer version of repo2skill")
   .option("-i, --interactive", "Interactive guided mode")
   .action(async (repo: string | undefined, opts: any) => {
@@ -50,6 +55,28 @@ program
       if (opts.checkUpdates) {
         const result = await checkForUpdates();
         console.log(formatUpdateCheck(result));
+        return;
+      }
+
+      // Show deps mode
+      if (opts.showDeps && (repo || opts.local)) {
+        let repoDir: string;
+        let cleanup = false;
+        if (opts.local) {
+          repoDir = path.resolve(opts.local);
+        } else {
+          const simpleGit = require("simple-git").default;
+          const url = repo!.startsWith("http") ? repo! : `https://github.com/${repo}`;
+          repoDir = path.join(os.tmpdir(), `repo2skill-deps-${Date.now()}`);
+          await simpleGit().clone(url, repoDir, ["--depth", "1"]);
+          cleanup = true;
+        }
+        try {
+          const report = resolveDependencies(repoDir);
+          console.log(`\n${formatDependencies(report)}\n`);
+        } finally {
+          if (cleanup) fs.rmSync(repoDir, { recursive: true, force: true });
+        }
         return;
       }
 
@@ -365,6 +392,21 @@ async function publishSkill(skillDir: string) {
     console.error(`❌ Publish failed: ${err.message}`);
   }
 }
+
+// Validate subcommand
+program
+  .command("validate <file>")
+  .description("Validate SKILL.md against the AgentSkills spec")
+  .action((file: string) => {
+    const filePath = path.resolve(file);
+    if (!fs.existsSync(filePath)) {
+      console.error(`❌ File not found: ${filePath}`);
+      process.exit(1);
+    }
+    const result = validateSkillMd(filePath);
+    console.log(formatValidationResult(result));
+    if (result.failed > 0) process.exit(1);
+  });
 
 // Lint subcommand
 program

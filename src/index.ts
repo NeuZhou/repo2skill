@@ -450,3 +450,13 @@ export { generateChangelog, formatChangelog, categorizeCommit } from "./changelo
 export type { Changelog, ChangelogEntry } from "./changelog";
 export { runInteractive } from "./interactive";
 export type { InteractiveAnswers } from "./interactive";
+export { resolveDependencies, formatDependencies, generatePrerequisitesSection } from "./dependencies";
+export type { DependencyReport } from "./dependencies";
+export { extractApi, generateApiReferenceSection } from "./api-extractor";
+export type { ApiEntry } from "./api-extractor";
+export { generateExamples, extractReadmeExamples, extractTestExamples, extractExampleDirExamples, generateApiExamples } from "./example-gen";
+export type { GeneratedExample } from "./example-gen";
+export { getVersionInfo, generateVersionStamp, formatVersionLine, injectVersionInfo, listTags } from "./versioning";
+export type { VersionInfo } from "./versioning";
+export { validateSkillMd, formatValidationResult } from "./validator";
+export type { ValidationResult, ValidationCheck } from "./validator";
