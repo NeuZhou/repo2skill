@@ -17,6 +17,25 @@ export interface Repo2SkillResult {
   quality?: SkillQuality;
 }
 
+async function cloneRepo(url: string, tmpDir: string): Promise<void> {
+  const git = simpleGit();
+  try {
+    await git.clone(url, tmpDir, ["--depth", "1", "--single-branch", "--config", "core.longpaths=true"]);
+  } catch (err: any) {
+    const msg = err.message || String(err);
+    if (msg.includes("not found") || msg.includes("does not exist") || msg.includes("Repository not found")) {
+      throw new Error(`Repository not found: ${url}. Check the URL or owner/repo format.`);
+    }
+    if (msg.includes("rate limit") || msg.includes("403")) {
+      throw new Error(`GitHub API rate limited. Wait a few minutes or set a GITHUB_TOKEN.`);
+    }
+    if (msg.includes("timeout") || msg.includes("ETIMEDOUT")) {
+      throw new Error(`Clone timed out for ${url}. The repo may be too large or the network is slow.`);
+    }
+    throw new Error(`Failed to clone ${url}: ${msg}`);
+  }
+}
+
 function parseRepoArg(repo: string): { url: string; name: string } {
   // Full URL
   if (repo.startsWith("http")) {
@@ -41,13 +60,16 @@ export async function repo2skill(
   // Clone to temp dir
   const tmpDir = path.join(os.tmpdir(), `repo2skill-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   console.log(`📦 Cloning ${url}...`);
-  const git = simpleGit();
-  await git.clone(url, tmpDir, ["--depth", "1", "--single-branch", "--config", "core.longpaths=true"]);
+  await cloneRepo(url, tmpDir);
 
   try {
     // Analyze
     console.log(`🔍 Analyzing repository...`);
     const analysis = await analyzeRepo(tmpDir, repoName);
+
+    if (!analysis.readmeRaw && !analysis.description) {
+      console.warn(`⚠️  Warning: No README or description found. The generated skill may be sparse.`);
+    }
 
     // Generate
     console.log(`⚙️  Generating skill...`);
@@ -95,8 +117,7 @@ export async function repo2skillJson(repo: string): Promise<RepoAnalysis> {
   const { url, name: repoName } = parseRepoArg(repo);
 
   const tmpDir = path.join(os.tmpdir(), `repo2skill-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
-  const git = simpleGit();
-  await git.clone(url, tmpDir, ["--depth", "1", "--single-branch", "--config", "core.longpaths=true"]);
+  await cloneRepo(url, tmpDir);
 
   try {
     const analysis = await analyzeRepo(tmpDir, repoName);
@@ -144,8 +165,7 @@ export async function upgradeSkill(skillDir: string): Promise<UpgradeResult> {
 
   const tmpDir = path.join(os.tmpdir(), `repo2skill-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   console.log(`📦 Cloning ${url} for upgrade...`);
-  const git = simpleGit();
-  await git.clone(url, tmpDir, ["--depth", "1", "--single-branch", "--config", "core.longpaths=true"]);
+  await cloneRepo(url, tmpDir);
 
   try {
     console.log(`🔍 Re-analyzing repository...`);
@@ -210,8 +230,7 @@ export async function repo2skillDryRun(repo: string, nameOverride?: string): Pro
 
   const tmpDir = path.join(os.tmpdir(), `repo2skill-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   console.log(`📦 Cloning ${url}...`);
-  const git = simpleGit();
-  await git.clone(url, tmpDir, ["--depth", "1", "--single-branch", "--config", "core.longpaths=true"]);
+  await cloneRepo(url, tmpDir);
 
   try {
     console.log(`🔍 Analyzing repository...`);
