@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/NeuZhou/repo2skill/main/assets/logo.png" alt="repo2skill" width="120" />
-</p>
-
 <h1 align="center">🔧 repo2skill</h1>
 
 <p align="center">
@@ -9,12 +5,10 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/repo2skill"><img src="https://img.shields.io/npm/v/repo2skill" alt="npm"></a>
   <a href="https://github.com/NeuZhou/repo2skill/actions/workflows/ci.yml"><img src="https://github.com/NeuZhou/repo2skill/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT"></a>
   <a href="#"><img src="https://img.shields.io/badge/languages-20%2B-blue" alt="20+ Languages"></a>
   <a href="#"><img src="https://img.shields.io/badge/tests-100%2B-brightgreen" alt="Tests"></a>
-  <a href="https://github.com/NeuZhou/repo2skill"><img src="https://img.shields.io/github/stars/NeuZhou/repo2skill" alt="Stars"></a>
 </p>
 
 <p align="center">
@@ -26,7 +20,12 @@
 ## Quick Start
 
 ```bash
-npx repo2skill https://github.com/facebook/react
+# Clone and build
+git clone https://github.com/NeuZhou/repo2skill && cd repo2skill
+npm install && npm run build
+
+# Run
+node dist/cli.js https://github.com/facebook/react
 ```
 
 ```
