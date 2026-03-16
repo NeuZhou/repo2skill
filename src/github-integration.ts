@@ -1,9 +1,52 @@
 /**
  * GitHub Integration — fetch extra metadata from GitHub API
  * Uses unauthenticated requests by default, GITHUB_TOKEN env for higher rate limits.
+ * v3.0: Added in-memory + disk caching for API responses.
  */
 
 import * as https from "https";
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
+
+// --- Response Cache (in-memory + disk) ---
+const memoryCache = new Map<string, { data: any; expires: number }>();
+const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+function getCacheDir(): string {
+  const dir = path.join(os.tmpdir(), "repo2skill-cache");
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function getCached(key: string): any | null {
+  // Check memory first
+  const mem = memoryCache.get(key);
+  if (mem && mem.expires > Date.now()) return mem.data;
+
+  // Check disk
+  try {
+    const file = path.join(getCacheDir(), Buffer.from(key).toString("base64url") + ".json");
+    if (fs.existsSync(file)) {
+      const raw = JSON.parse(fs.readFileSync(file, "utf-8"));
+      if (raw.expires > Date.now()) {
+        memoryCache.set(key, raw);
+        return raw.data;
+      }
+      fs.unlinkSync(file);
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+function setCache(key: string, data: any): void {
+  const entry = { data, expires: Date.now() + CACHE_TTL_MS };
+  memoryCache.set(key, entry);
+  try {
+    const file = path.join(getCacheDir(), Buffer.from(key).toString("base64url") + ".json");
+    fs.writeFileSync(file, JSON.stringify(entry));
+  } catch { /* ignore */ }
+}
 
 export interface GitHubMetadata {
   stars: number;
@@ -19,7 +62,10 @@ export interface GitHubMetadata {
   defaultBranch: string;
 }
 
-function githubRequest(path: string): Promise<any> {
+function githubRequest(apiPath: string): Promise<any> {
+  const cached = getCached(apiPath);
+  if (cached !== null) return Promise.resolve(cached);
+
   return new Promise((resolve, reject) => {
     const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
     const headers: Record<string, string> = {
@@ -30,7 +76,7 @@ function githubRequest(path: string): Promise<any> {
 
     const options = {
       hostname: "api.github.com",
-      path,
+      path: apiPath,
       headers,
     };
 
@@ -44,7 +90,9 @@ function githubRequest(path: string): Promise<any> {
           reject(new Error(`GitHub API ${res.statusCode}: ${data.slice(0, 200)}`));
         } else {
           try {
-            resolve(JSON.parse(data));
+            const parsed = JSON.parse(data);
+            setCache(apiPath, parsed);
+            resolve(parsed);
           } catch {
             reject(new Error(`Invalid JSON from GitHub API: ${data.slice(0, 100)}`));
           }
