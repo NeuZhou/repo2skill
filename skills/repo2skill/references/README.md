@@ -20,17 +20,12 @@
 ## Quick Start
 
 ```bash
-# Install globally
-npm install -g repo2skill
+# Clone and build
+git clone https://github.com/NeuZhou/repo2skill && cd repo2skill
+npm install && npm run build
 
 # Run
-repo2skill https://github.com/facebook/react
-```
-
-Or use without installing:
-
-```bash
-npx repo2skill https://github.com/facebook/react
+node dist/cli.js https://github.com/facebook/react
 ```
 
 ```

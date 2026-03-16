@@ -18,6 +18,15 @@
     "type": "git",
     "url": "https://github.com/NeuZhou/repo2skill"
   },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "!dist/__tests__/",
+    "skill/",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md"
+  ],
   "keywords": [
     "openclaw",
     "skill",
