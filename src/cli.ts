@@ -62,6 +62,8 @@ program
         console.log(`  Monorepo:      ${result.isMonorepo ? `Yes (${result.monorepoPackages.length} packages)` : "No"}`);
         console.log(`  Features:      ${result.features.length > 0 ? result.features.slice(0, 3).join("; ") : "(none detected)"}`);
         console.log(`  Code examples: ${result.usageExamples}`);
+        console.log(`  Package name:  ${result.packageName}`);
+        console.log(`  Install cmd:   ${result.installCommand}`);
         console.log(`  When to use:   ${result.whenToUse.join("; ")}`);
         console.log("");
         return;

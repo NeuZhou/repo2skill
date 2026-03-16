@@ -154,17 +154,18 @@ function buildBody(analysis: RepoAnalysis, skillName: string, isCLI: boolean): s
   } else {
     lines.push("### Install");
     lines.push("");
+    const pkgName = analysis.packageName || analysis.name;
     if (analysis.language === "JavaScript" || analysis.language === "TypeScript") {
       lines.push("```bash");
-      lines.push(`npm install ${analysis.name}`);
+      lines.push(`npm install ${pkgName}`);
       lines.push("```");
     } else if (analysis.language === "Python") {
       lines.push("```bash");
-      lines.push(`pip install ${analysis.name}`);
+      lines.push(`pip install ${pkgName}`);
       lines.push("```");
     } else if (analysis.language === "Rust") {
       lines.push("```bash");
-      lines.push(`cargo install ${analysis.name}`);
+      lines.push(`cargo install ${pkgName}`);
       lines.push("```");
     } else if (analysis.language === "Go") {
       lines.push("```bash");

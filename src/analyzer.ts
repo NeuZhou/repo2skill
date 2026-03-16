@@ -40,6 +40,8 @@ export interface RepoAnalysis {
     entrypoint: string;
   };
   keyApi: string[];
+  /** Actual package name from manifest (may differ from repo name) */
+  packageName: string;
 }
 
 export async function analyzeRepo(repoDir: string, repoName: string): Promise<RepoAnalysis> {
@@ -71,6 +73,7 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
     isMonorepo: false,
     monorepoPackages: [],
     keyApi: [],
+    packageName: "",
   };
 
   // File tree (top 2 levels)
@@ -133,11 +136,35 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
     const configKeys = ["configuration", "config", "options", "settings"];
     analysis.configSection = findFirstSection(analysis.sections, configKeys);
 
-    // Features extraction
-    const featuresKeys = ["features", "highlights", "why"];
-    const featuresText = findFirstSection(analysis.sections, featuresKeys);
+    // Features extraction — try exact keys first, then partial match on section names containing "feature"
+    const featuresKeys = ["features", "highlights", "why", "key features", "main features", "core features", "whats included", "what you get"];
+    let featuresText = findFirstSection(analysis.sections, featuresKeys);
+    if (!featuresText) {
+      // Partial match: any section whose key contains "feature" or "highlight"
+      for (const [key, value] of Object.entries(analysis.sections)) {
+        if (key.includes("feature") || key.includes("highlight")) {
+          featuresText = value;
+          break;
+        }
+      }
+    }
+    // Fallback: extract feature-like bullet points from the first few README paragraphs
+    if (!featuresText && analysis.readmeRaw) {
+      const introFeatures = extractFeaturesFromIntro(analysis.readmeRaw);
+      if (introFeatures.length > 0) {
+        analysis.features = introFeatures;
+      }
+    }
     if (featuresText) {
       analysis.features = extractFeatureList(featuresText);
+    }
+
+    // Supplement features from package metadata if still empty/sparse
+    if (analysis.features.length < 3) {
+      const metaFeatures = extractFeaturesFromMetadata(repoDir, analysis, allFiles);
+      for (const f of metaFeatures) {
+        if (!analysis.features.includes(f)) analysis.features.push(f);
+      }
     }
 
     // Extract all code examples from usage/examples/API/config sections
@@ -158,6 +185,7 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
     try {
       const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
       analysis.description = analysis.description || pkg.description || "";
+      if (pkg.name) analysis.packageName = pkg.name;
       if (pkg.bin) {
         const bins = typeof pkg.bin === "string" ? { [pkg.name || repoName]: pkg.bin } : pkg.bin;
         for (const [name] of Object.entries(bins)) {
@@ -176,17 +204,20 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
   const pyprojectPath = path.join(repoDir, "pyproject.toml");
   if (fs.existsSync(pyprojectPath)) {
     const content = fs.readFileSync(pyprojectPath, "utf-8");
-    const toml = require("toml");
+    const toml = require("@iarna/toml");
     try {
       const parsed = toml.parse(content);
       const proj = parsed.project || parsed.tool?.poetry || {};
       analysis.description = analysis.description || proj.description || "";
+      if (proj.name && !analysis.packageName) analysis.packageName = proj.name;
       const scripts = proj.scripts || parsed.tool?.poetry?.scripts || {};
       for (const [name] of Object.entries(scripts)) {
         analysis.cliCommands.push({ name });
       }
       analysis.license = typeof proj.license === "string" ? proj.license : proj.license?.text || "";
-    } catch {}
+    } catch (e: any) {
+      console.warn(`⚠️  Could not parse pyproject.toml: ${e.message}`);
+    }
   }
 
   // setup.py (Python fallback)
@@ -195,17 +226,36 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
     const content = fs.readFileSync(setupPyPath, "utf-8");
     const descMatch = content.match(/description\s*=\s*["']([^"']+)["']/);
     if (descMatch) analysis.description = descMatch[1];
+    if (!analysis.packageName) {
+      const nameMatch = content.match(/name\s*=\s*["']([^"']+)["']/);
+      if (nameMatch) analysis.packageName = nameMatch[1];
+    }
+  }
+
+  // setup.cfg (Python fallback)
+  const setupCfgPath = path.join(repoDir, "setup.cfg");
+  if (fs.existsSync(setupCfgPath)) {
+    const content = fs.readFileSync(setupCfgPath, "utf-8");
+    if (!analysis.packageName) {
+      const nameMatch = content.match(/^\s*name\s*=\s*(.+)$/m);
+      if (nameMatch) analysis.packageName = nameMatch[1].trim();
+    }
+    if (!analysis.description) {
+      const descMatch = content.match(/^\s*description\s*=\s*(.+)$/m);
+      if (descMatch) analysis.description = descMatch[1].trim();
+    }
   }
 
   // Cargo.toml (Rust)
   const cargoPath = path.join(repoDir, "Cargo.toml");
   if (fs.existsSync(cargoPath)) {
     const content = fs.readFileSync(cargoPath, "utf-8");
-    const toml = require("toml");
+    const toml = require("@iarna/toml");
     try {
       const parsed = toml.parse(content);
       const pkg = parsed.package || {};
       analysis.description = analysis.description || pkg.description || "";
+      if (pkg.name && !analysis.packageName) analysis.packageName = pkg.name;
       analysis.license = pkg.license || "";
       if (parsed.bin || fs.existsSync(path.join(repoDir, "src", "main.rs"))) {
         analysis.cliCommands.push({ name: pkg.name || repoName });
@@ -814,6 +864,80 @@ function extractFeatureList(text: string): string[] {
   return features;
 }
 
+/**
+ * Extract feature-like bullet points from the README intro (before the first ## section).
+ * Many repos list features as bullet points right after the description.
+ */
+function extractFeaturesFromIntro(readme: string): string[] {
+  // Get content before first ## heading (or first 100 lines)
+  const lines = readme.split("\n");
+  const introLines: string[] = [];
+  let pastTitle = false;
+  for (const line of lines) {
+    if (/^#{2,3}\s/.test(line)) {
+      if (pastTitle) break;
+      pastTitle = true;
+      continue;
+    }
+    if (/^#\s/.test(line)) { pastTitle = true; continue; }
+    introLines.push(line);
+  }
+  const introText = introLines.join("\n");
+  const features = extractFeatureList(introText);
+  // Only return if we found a reasonable cluster of features (3+)
+  return features.length >= 3 ? features.slice(0, 10) : [];
+}
+
+/**
+ * Extract features from package metadata (keywords, description) and file structure.
+ */
+function extractFeaturesFromMetadata(repoDir: string, analysis: RepoAnalysis, allFiles: string[]): string[] {
+  const features: string[] = [];
+
+  // From package.json keywords
+  const pkgPath = path.join(repoDir, "package.json");
+  if (fs.existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+      if (pkg.keywords && Array.isArray(pkg.keywords)) {
+        for (const kw of pkg.keywords.slice(0, 5)) {
+          if (typeof kw === "string" && kw.length > 2 && kw.length < 50) {
+            features.push(kw.charAt(0).toUpperCase() + kw.slice(1) + " support");
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // From pyproject.toml keywords
+  const pyprojectPath = path.join(repoDir, "pyproject.toml");
+  if (fs.existsSync(pyprojectPath)) {
+    try {
+      const toml = require("@iarna/toml");
+      const parsed = toml.parse(fs.readFileSync(pyprojectPath, "utf-8"));
+      const proj = parsed.project || parsed.tool?.poetry || {};
+      if (proj.keywords && Array.isArray(proj.keywords)) {
+        for (const kw of proj.keywords.slice(0, 5)) {
+          if (typeof kw === "string" && kw.length > 2 && kw.length < 50) {
+            features.push(kw.charAt(0).toUpperCase() + kw.slice(1) + " support");
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // From file structure detection
+  if (analysis.hasTests) features.push("Test suite included");
+  if (allFiles.some(f => /^docs?\//i.test(f) || f === "docs/index.md" || f === "docs/README.md")) features.push("Documentation included");
+  if (allFiles.some(f => /^\.github\/workflows\//i.test(f) || f === ".travis.yml" || f === ".circleci/config.yml")) features.push("CI/CD configured");
+  if (allFiles.some(f => f === "CHANGELOG.md" || f === "CHANGES.md" || f === "HISTORY.md")) features.push("Changelog maintained");
+  if (allFiles.some(f => /^examples?\//i.test(f))) features.push("Example code provided");
+  if (allFiles.some(f => f === "Dockerfile" || f === "docker-compose.yml" || f === "docker-compose.yaml")) features.push("Docker support");
+  if (allFiles.some(f => /\.d\.ts$/.test(f) || f === "tsconfig.json")) features.push("TypeScript support");
+
+  return features;
+}
+
 function detectLanguages(files: string[]): string[] {
   const counts: Record<string, number> = {};
   const extMap: Record<string, string> = {
@@ -891,9 +1015,12 @@ function generateWhenToUse(analysis: RepoAnalysis): string[] {
       break;
   }
 
-  // General keyword-based, but filtered by category to avoid mismatches
-  if (category !== "server-framework") {
-    if (desc.includes("http") || desc.includes("request")) items.push("Make HTTP requests");
+  // General keyword-based, but filtered to avoid false positives
+  // Only suggest "Make HTTP requests" if the project's PRIMARY purpose is HTTP
+  if (category !== "server-framework" && category !== "http-client") {
+    const isHttpLibrary = /\b(http client|http library|request library|fetch|ajax|http request)\b/i.test(desc)
+      && !/\b(sdk|ai|llm|model|agent|mcp|protocol|langchain|openai|anthropic|cohere|gemini)\b/i.test(desc);
+    if (isHttpLibrary) items.push("Make HTTP requests");
   }
   if (desc.includes("test")) items.push("Run or write tests");
   if (desc.includes("lint") || desc.includes("format")) items.push("Lint or format code");
@@ -938,7 +1065,7 @@ function generateTriggerPhrases(analysis: RepoAnalysis): string[] {
   }
 
   const desc = (analysis.richDescription + " " + analysis.description).toLowerCase();
-  if (desc.includes("http") || desc.includes("request")) phrases.push("make http request", "fetch url");
+  if (/\b(http client|http library|request library)\b/i.test(desc) && !/\b(sdk|ai|llm|model|agent|mcp|protocol)\b/i.test(desc)) phrases.push("make http request", "fetch url");
   if (desc.includes("search") || desc.includes("grep")) phrases.push("search files", "find in code");
   if (desc.includes("lint") || desc.includes("format")) phrases.push("lint code", "format code");
   if (desc.includes("json")) phrases.push("parse json", "process json");

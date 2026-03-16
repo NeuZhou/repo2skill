@@ -27,6 +27,7 @@
     "ai"
   ],
   "dependencies": {
+    "@iarna/toml": "^2.2.5",
     "commander": "^12.1.0",
     "glob": "^11.0.0",
     "simple-git": "^3.27.0",

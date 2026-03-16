@@ -101,6 +101,7 @@ describe("categorizeProject", () => {
       isMonorepo: false,
       monorepoPackages: [],
       keyApi: [],
+      packageName: "",
       ...overrides,
     };
   }

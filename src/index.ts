@@ -200,6 +200,8 @@ export interface DryRunResult {
   features: string[];
   usageExamples: number;
   whenToUse: string[];
+  packageName: string;
+  installCommand: string;
 }
 
 export async function repo2skillDryRun(repo: string, nameOverride?: string): Promise<DryRunResult> {
@@ -214,6 +216,22 @@ export async function repo2skillDryRun(repo: string, nameOverride?: string): Pro
   try {
     console.log(`🔍 Analyzing repository...`);
     const analysis = await analyzeRepo(tmpDir, repoName);
+    const pkgName = analysis.packageName || analysis.name;
+    let installCmd = "";
+    if (analysis.installInstructions) {
+      // Extract the actual command from README install instructions
+      const cmdMatch = analysis.installInstructions.match(/(?:pip install|npm install|cargo install|go install|gem install|composer require)\s+\S+/);
+      installCmd = cmdMatch ? cmdMatch[0] : "(from README)";
+    } else if (analysis.language === "JavaScript" || analysis.language === "TypeScript") {
+      installCmd = `npm install ${pkgName}`;
+    } else if (analysis.language === "Python") {
+      installCmd = `pip install ${pkgName}`;
+    } else if (analysis.language === "Rust") {
+      installCmd = `cargo install ${pkgName}`;
+    } else if (analysis.language === "Go") {
+      installCmd = `go install ${analysis.entryPoints[0] || analysis.name}@latest`;
+    }
+
     return {
       skillName,
       description: analysis.richDescription || analysis.description,
@@ -228,6 +246,8 @@ export async function repo2skillDryRun(repo: string, nameOverride?: string): Pro
       features: analysis.features,
       usageExamples: analysis.usageExamples.length,
       whenToUse: analysis.whenToUse,
+      packageName: pkgName,
+      installCommand: installCmd,
     };
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });

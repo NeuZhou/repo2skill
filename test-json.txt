@@ -1,0 +1,50 @@
+{
+  "name": "anthropic-sdk-python",
+  "description": "The official Python library for the anthropic API",
+  "richDescription": "The Claude SDK for Python provides access to the [Claude API](https://docs.anthropic.com/en/api/) from Python applications.\n\nFull documentation is available at **[platform.claude.com/docs/en/api/sdks/python](https://platform.claude.com/docs/en/api/sdks/python)**.",
+  "whenToUse": [
+    "Work with the anthropic-sdk-python Python project"
+  ],
+  "whenNotToUse": [
+    "Projects using JavaScript or TypeScript (different ecosystem)"
+  ],
+  "triggerPhrases": [
+    "use anthropic-sdk-python",
+    "install anthropic-sdk-python",
+    "how to use anthropic-sdk-python"
+  ],
+  "language": "Python",
+  "languages": [
+    "Python"
+  ],
+  "cliCommands": [],
+  "installInstructions": "```sh\r\npip install anthropic\r\n```",
+  "usageSection": "```python\r\nimport os\r\nfrom anthropic import Anthropic\r\n\r\nclient = Anthropic(\r\n    api_key=os.environ.get(\"ANTHROPIC_API_KEY\"),  # This is the default and can be omitted\r\n)\r\n\r\nmessage = client.messages.create(\r\n    max_tokens=1024,\r\n    messages=[\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Hello, Claude\",\r\n        }\r\n    ],\r\n    model=\"claude-opus-4-6\",\r\n)\r\nprint(message.content)\r\n```",
+  "usageExamples": [
+    "```python\r\nimport os\r\nfrom anthropic import Anthropic\r\n\r\nclient = Anthropic(\r\n    api_key=os.environ.get(\"ANTHROPIC_API_KEY\"),  # This is the default and can be omitted\r\n)\r\n\r\nmessage = client.messages.create(\r\n    max_tokens=1024,\r\n    messages=[\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Hello, Claude\",\r\n        }\r\n    ],\r\n    model=\"claude-opus-4-6\",\r\n)\r\nprint(message.content)\r\n```"
+  ],
+  "configSection": "",
+  "features": [],
+  "apiSection": "",
+  "examplesSection": "",
+  "readmeRaw": "# Claude SDK for Python\r\n\r\n[![PyPI version](https://img.shields.io/pypi/v/anthropic.svg)](https://pypi.org/project/anthropic/)\r\n\r\nThe Claude SDK for Python provides access to the [Claude API](https://docs.anthropic.com/en/api/) from Python applications.\r\n\r\n## Documentation\r\n\r\nFull documentation is available at **[platform.claude.com/docs/en/api/sdks/python](https://platform.claude.com/docs/en/api/sdks/python)**.\r\n\r\n## Installation\r\n\r\n```sh\r\npip install anthropic\r\n```\r\n\r\n## Getting started\r\n\r\n```python\r\nimport os\r\nfrom anthropic import Anthropic\r\n\r\nclient = Anthropic(\r\n    api_key=os.environ.get(\"ANTHROPIC_API_KEY\"),  # This is the default and can be omitted\r\n)\r\n\r\nmessage = client.messages.create(\r\n    max_tokens=1024,\r\n    messages=[\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Hello, Claude\",\r\n        }\r\n    ],\r\n    model=\"claude-opus-4-6\",\r\n)\r\nprint(message.content)\r\n```\r\n\r\n## Requirements\r\n\r\nPython 3.9+\r\n\r\n## Contributing\r\n\r\nSee [CONTRIBUTING.md](./CONTRIBUTING.md).\r\n\r\n## License\r\n\r\nThis project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.\r\n",
+  "readmeFirstParagraph": "The Claude SDK for Python provides access to the [Claude API](https://docs.anthropic.com/en/api/) from Python applications.",
+  "dependencies": [],
+  "entryPoints": [],
+  "hasTests": true,
+  "license": "MIT",
+  "sections": {
+    "claude sdk for python": "[![PyPI version](https://img.shields.io/pypi/v/anthropic.svg)](https://pypi.org/project/anthropic/)\r\n\r\nThe Claude SDK for Python provides access to the [Claude API](https://docs.anthropic.com/en/api/) from Python applications.",
+    "documentation": "Full documentation is available at **[platform.claude.com/docs/en/api/sdks/python](https://platform.claude.com/docs/en/api/sdks/python)**.",
+    "installation": "```sh\r\npip install anthropic\r\n```",
+    "getting started": "```python\r\nimport os\r\nfrom anthropic import Anthropic\r\n\r\nclient = Anthropic(\r\n    api_key=os.environ.get(\"ANTHROPIC_API_KEY\"),  # This is the default and can be omitted\r\n)\r\n\r\nmessage = client.messages.create(\r\n    max_tokens=1024,\r\n    messages=[\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Hello, Claude\",\r\n        }\r\n    ],\r\n    model=\"claude-opus-4-6\",\r\n)\r\nprint(message.content)\r\n```",
+    "requirements": "Python 3.9+",
+    "contributing": "See [CONTRIBUTING.md](./CONTRIBUTING.md).",
+    "license": "This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details."
+  },
+  "fileTree": "Γö£ΓöÇΓöÇ bin/\nΓöé   Γö£ΓöÇΓöÇ check-release-environment\nΓöé   ΓööΓöÇΓöÇ publish-pypi\nΓö£ΓöÇΓöÇ examples/\nΓöé   Γö£ΓöÇΓöÇ memory/\nΓöé   Γö£ΓöÇΓöÇ auto_compaction.py\nΓöé   Γö£ΓöÇΓöÇ azure.py\nΓöé   Γö£ΓöÇΓöÇ batch_results.py\nΓöé   Γö£ΓöÇΓöÇ bedrock.py\nΓöé   Γö£ΓöÇΓöÇ images.py\nΓöé   Γö£ΓöÇΓöÇ logo.png\nΓöé   Γö£ΓöÇΓöÇ mcp_tool_runner.py\nΓöé   Γö£ΓöÇΓöÇ messages_stream.py\nΓöé   Γö£ΓöÇΓöÇ messages.py\nΓöé   Γö£ΓöÇΓöÇ structured_outputs_streaming.py\nΓöé   Γö£ΓöÇΓöÇ structured_outputs.py\nΓöé   Γö£ΓöÇΓöÇ text_completions_demo_async.py\nΓöé   Γö£ΓöÇΓöÇ text_completions_demo_sync.py\nΓöé   Γö£ΓöÇΓöÇ text_completions_streaming.py\nΓöé   Γö£ΓöÇΓöÇ thinking_stream.py\nΓöé   Γö£ΓöÇΓöÇ thinking.py\nΓöé   Γö£ΓöÇΓöÇ tools_runner_search_tool.py\nΓöé   Γö£ΓöÇΓöÇ tools_runner.py\nΓöé   Γö£ΓöÇΓöÇ tools_stream.py\nΓöé   Γö£ΓöÇΓöÇ tools.py\nΓöé   Γö£ΓöÇΓöÇ vertex.py\nΓöé   Γö£ΓöÇΓöÇ web_search_stream.py\nΓöé   ΓööΓöÇΓöÇ web_search.py\nΓö£ΓöÇΓöÇ scripts/\nΓöé   Γö£ΓöÇΓöÇ utils/\nΓöé   Γö£ΓöÇΓöÇ bootstrap\nΓöé   Γö£ΓöÇΓöÇ detect-breaking-changes\nΓöé   Γö£ΓöÇΓöÇ detect-breaking-changes.py\nΓöé   Γö£ΓöÇΓöÇ format\nΓöé   Γö£ΓöÇΓöÇ lint\nΓöé   Γö£ΓöÇΓöÇ mock\nΓöé   ΓööΓöÇΓöÇ test\nΓö£ΓöÇΓöÇ src/\nΓöé   ΓööΓöÇΓöÇ anthropic/\nΓö£ΓöÇΓöÇ tests/\nΓöé   Γö£ΓöÇΓöÇ api_resources/\nΓöé   Γö£ΓöÇΓöÇ decoders/\nΓöé   Γö£ΓöÇΓöÇ lib/\nΓöé   Γö£ΓöÇΓöÇ test_utils/\nΓöé   Γö£ΓöÇΓöÇ __init__.py\nΓöé   Γö£ΓöÇΓöÇ conftest.py\nΓöé   Γö£ΓöÇΓöÇ sample_file.txt\nΓöé   Γö£ΓöÇΓöÇ test_client.py\nΓöé   Γö£ΓöÇΓöÇ test_deepcopy.py\nΓöé   Γö£ΓöÇΓöÇ test_extract_files.py\nΓöé   Γö£ΓöÇΓöÇ test_files.py\nΓöé   Γö£ΓöÇΓöÇ test_legacy_response.py\nΓöé   Γö£ΓöÇΓöÇ test_models.py\nΓöé   Γö£ΓöÇΓöÇ test_qs.py\nΓöé   Γö£ΓöÇΓöÇ test_required_args.py\nΓöé   Γö£ΓöÇΓöÇ test_response.py\nΓöé   Γö£ΓöÇΓöÇ test_streaming.py\nΓöé   Γö£ΓöÇΓöÇ test_transform.py\nΓöé   ΓööΓöÇΓöÇ utils.py\nΓö£ΓöÇΓöÇ api.md\nΓö£ΓöÇΓöÇ Brewfile\nΓö£ΓöÇΓöÇ CHANGELOG.md\nΓö£ΓöÇΓöÇ CONTRIBUTING.md\nΓö£ΓöÇΓöÇ helpers.md\nΓö£ΓöÇΓöÇ LICENSE\nΓö£ΓöÇΓöÇ pyproject.toml\nΓö£ΓöÇΓöÇ README.md\nΓö£ΓöÇΓöÇ release-please-config.json\nΓö£ΓöÇΓöÇ requirements-dev.lock\nΓö£ΓöÇΓöÇ SECURITY.md\nΓö£ΓöÇΓöÇ tools.md\nΓööΓöÇΓöÇ uv.lock",
+  "isMonorepo": false,
+  "monorepoPackages": [],
+  "keyApi": [],
+  "packageName": "anthropic"
+}
