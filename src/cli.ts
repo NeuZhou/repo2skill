@@ -5,6 +5,11 @@ import { formatQualityScore, scoreSkillQuality } from "./generator";
 import { lintSkillMd, formatLintResult } from "./linter";
 import { registryAdd, registryRemove, registryList, registryClear } from "./registry";
 import { listTemplates, isValidTemplate } from "./templates";
+import { checkForUpdates, formatUpdateCheck } from "./update-checker";
+import { buildComparisonEntry, formatComparison } from "./compare";
+import { generateChangelog, formatChangelog } from "./changelog";
+import { runInteractive } from "./interactive";
+import { analyzeRepo } from "./analyzer";
 import * as path from "path";
 import * as fs from "fs";
 import { execSync } from "child_process";
@@ -14,7 +19,7 @@ const program = new Command();
 program
   .name("repo2skill")
   .description("Convert any GitHub repo into an OpenClaw skill. One command.")
-  .version("2.2.0")
+  .version("2.3.0")
   .argument("[repo]", "GitHub URL or owner/repo (or local path with --local)")
   .option("-o, --output <dir>", "Output directory", "./skills")
   .option("-n, --name <name>", "Override skill name")
@@ -33,10 +38,37 @@ program
   .option("--min-quality <score>", "Skip skills below this quality score (0-100)", parseInt)
   .option("--package <path>", "Target a specific package in a monorepo (e.g. packages/core)")
   .option("--diff <skill-md>", "Compare with existing SKILL.md and show what changed")
+  .option("--check-updates", "Check for newer version of repo2skill")
+  .option("-i, --interactive", "Interactive guided mode")
   .action(async (repo: string | undefined, opts: any) => {
     try {
       if (opts.verbose) {
         process.env.REPO2SKILL_VERBOSE = "1";
+      }
+
+      // Check updates mode
+      if (opts.checkUpdates) {
+        const result = await checkForUpdates();
+        console.log(formatUpdateCheck(result));
+        return;
+      }
+
+      // Interactive mode
+      if (opts.interactive) {
+        const answers = await runInteractive();
+        const format = answers.format;
+        if (format === "json" || format === "yaml") {
+          const data = await repo2skillStructured(answers.repo, { local: false });
+          outputStructured(data, format);
+        } else {
+          const result = await repo2skill(answers.repo, {
+            outputDir: path.resolve(opts.output),
+            template: answers.template,
+            github: answers.includeGithub,
+          });
+          printResult(result, opts.minQuality);
+        }
+        return;
       }
 
       // Upgrade mode
@@ -346,6 +378,83 @@ program
     }
     const result = lintSkillMd(filePath);
     console.log(formatLintResult(result));
+  });
+
+// Compare subcommand
+program
+  .command("compare <repo1> <repo2>")
+  .description("Compare two repos side by side (languages, features, quality, size)")
+  .action(async (repo1: string, repo2: string) => {
+    try {
+      const os = require("os");
+      const simpleGit = require("simple-git").default;
+
+      async function resolveRepo(repo: string): Promise<{ dir: string; name: string; cleanup: boolean }> {
+        if (fs.existsSync(repo) && fs.statSync(repo).isDirectory()) {
+          return { dir: repo, name: path.basename(repo), cleanup: false };
+        }
+        const url = repo.startsWith("http") ? repo : `https://github.com/${repo}`;
+        const name = repo.replace(/\.git$/, "").split("/").pop()!;
+        const tmpDir = path.join(os.tmpdir(), `repo2skill-cmp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
+        console.log(`📦 Cloning ${repo}...`);
+        await simpleGit().clone(url, tmpDir, ["--depth", "1"]);
+        return { dir: tmpDir, name, cleanup: true };
+      }
+
+      const [r1, r2] = await Promise.all([resolveRepo(repo1), resolveRepo(repo2)]);
+      try {
+        console.log(`🔍 Analyzing ${r1.name} and ${r2.name}...`);
+        const [a1, a2] = await Promise.all([
+          analyzeRepo(r1.dir, r1.name),
+          analyzeRepo(r2.dir, r2.name),
+        ]);
+        const comp = {
+          left: buildComparisonEntry(a1),
+          right: buildComparisonEntry(a2),
+        };
+        console.log(formatComparison(comp));
+      } finally {
+        if (r1.cleanup) fs.rmSync(r1.dir, { recursive: true, force: true });
+        if (r2.cleanup) fs.rmSync(r2.dir, { recursive: true, force: true });
+      }
+    } catch (err: any) {
+      console.error(`❌ ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// Changelog subcommand
+program
+  .command("changelog <repo>")
+  .description("Generate skill-relevant changelog from git history")
+  .option("-n, --max <count>", "Max commits to analyze", parseInt, 50)
+  .action(async (repo: string, opts: any) => {
+    try {
+      const os = require("os");
+      const simpleGit = require("simple-git").default;
+      let repoDir: string;
+      let cleanup = false;
+
+      if (fs.existsSync(repo) && fs.statSync(repo).isDirectory()) {
+        repoDir = repo;
+      } else {
+        const url = repo.startsWith("http") ? repo : `https://github.com/${repo}`;
+        repoDir = path.join(os.tmpdir(), `repo2skill-cl-${Date.now()}`);
+        console.log(`📦 Cloning ${repo}...`);
+        await simpleGit().clone(url, repoDir, ["--single-branch"]);
+        cleanup = true;
+      }
+
+      try {
+        const changelog = await generateChangelog(repoDir, opts.max || 50);
+        console.log(formatChangelog(changelog));
+      } finally {
+        if (cleanup) fs.rmSync(repoDir, { recursive: true, force: true });
+      }
+    } catch (err: any) {
+      console.error(`❌ ${err.message}`);
+      process.exit(1);
+    }
   });
 
 // Registry subcommand

@@ -442,3 +442,11 @@ export { registryAdd, registryRemove, registryList, registryClear, loadRegistry,
 export type { RegistryEntry, Registry } from "./registry";
 export { getTemplate, listTemplates, isValidTemplate } from "./templates";
 export type { TemplateConfig, TemplateName } from "./templates";
+export { checkForUpdates, compareVersions, formatUpdateCheck, getCurrentVersion } from "./update-checker";
+export type { UpdateCheckResult } from "./update-checker";
+export { buildComparisonEntry, formatComparison } from "./compare";
+export type { SkillComparison, SkillComparisonEntry } from "./compare";
+export { generateChangelog, formatChangelog, categorizeCommit } from "./changelog";
+export type { Changelog, ChangelogEntry } from "./changelog";
+export { runInteractive } from "./interactive";
+export type { InteractiveAnswers } from "./interactive";
