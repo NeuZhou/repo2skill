@@ -927,13 +927,19 @@ function extractFeaturesFromMetadata(repoDir: string, analysis: RepoAnalysis, al
   }
 
   // From file structure detection
-  if (analysis.hasTests) features.push("Test suite included");
+  if (analysis.hasTests && !features.some(f => /test/i.test(f))) features.push("Test suite included");
   if (allFiles.some(f => /^docs?\//i.test(f) || f === "docs/index.md" || f === "docs/README.md")) features.push("Documentation included");
   if (allFiles.some(f => /^\.github\/workflows\//i.test(f) || f === ".travis.yml" || f === ".circleci/config.yml")) features.push("CI/CD configured");
   if (allFiles.some(f => f === "CHANGELOG.md" || f === "CHANGES.md" || f === "HISTORY.md")) features.push("Changelog maintained");
   if (allFiles.some(f => /^examples?\//i.test(f))) features.push("Example code provided");
   if (allFiles.some(f => f === "Dockerfile" || f === "docker-compose.yml" || f === "docker-compose.yaml")) features.push("Docker support");
-  if (allFiles.some(f => /\.d\.ts$/.test(f) || f === "tsconfig.json")) features.push("TypeScript support");
+  if (allFiles.some(f => /\.d\.ts$/.test(f) || f === "tsconfig.json") && analysis.language !== "TypeScript") features.push("TypeScript support");
+
+  // From package description
+  const desc = (analysis.description || "").toLowerCase();
+  if (desc.includes("async") || desc.includes("asynchronous")) features.push("Async/await support");
+  if (desc.includes("streaming") || desc.includes("stream")) features.push("Streaming support");
+  if (desc.includes("type") && (desc.includes("safe") || desc.includes("typed"))) features.push("Type-safe API");
 
   return features;
 }
