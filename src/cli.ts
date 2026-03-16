@@ -5,8 +5,12 @@ import { formatQualityScore, scoreSkillQuality } from "./generator";
 import { lintSkillMd, formatLintResult } from "./linter";
 import { registryAdd, registryRemove, registryList, registryClear } from "./registry";
 import { listTemplates, isValidTemplate } from "./templates";
-import { checkForUpdates, formatUpdateCheck } from "./update-checker";
+import { checkForUpdates, formatUpdateCheck, checkSkillUpdates, formatSkillUpdateCheck } from "./update-checker";
 import { buildComparisonEntry, formatComparison } from "./compare";
+import { buildSkillGraph, generateGraphHtml, formatGraphSummary } from "./skill-graph";
+import { diffSkillFiles, formatSkillDiff } from "./skill-diff";
+import { buildQualityReport, generateQualityReportHtml, formatQualityReport } from "./quality-report";
+import { loadPlugin, createRepoData, runPlugins, injectPluginSections } from "./plugin";
 import { generateChangelog, formatChangelog } from "./changelog";
 import { runInteractive } from "./interactive";
 import { analyzeRepo } from "./analyzer";
@@ -30,7 +34,7 @@ const program = new Command();
 program
   .name("repo2skill")
   .description("Convert any GitHub repo into an OpenClaw skill. One command.")
-  .version("3.2.0")
+  .version("3.3.0")
   .argument("[repo]", "GitHub URL or owner/repo (or local path with --local)")
   .option("-o, --output <dir>", "Output directory", "./skills")
   .option("-n, --name <name>", "Override skill name")
@@ -746,6 +750,92 @@ program
     }
     const result = await detectMonorepo(absPath);
     console.log(`\n${formatMonorepoDetection(result)}\n`);
+  });
+
+// Graph subcommand
+program
+  .command("graph <skills-dir>")
+  .description("Visualize relationships between skills as interactive HTML graph")
+  .option("-o, --output <path>", "Output HTML file path")
+  .action((skillsDir: string, opts: any) => {
+    const absDir = path.resolve(skillsDir);
+    if (!fs.existsSync(absDir)) {
+      console.error(`❌ Directory not found: ${absDir}`);
+      process.exit(1);
+    }
+    const graph = buildSkillGraph(absDir);
+    if (graph.nodes.length === 0) {
+      console.log("\n📊 No skills found in " + absDir + "\n");
+      return;
+    }
+    if (opts.output) {
+      const html = generateGraphHtml(graph);
+      const outPath = path.resolve(opts.output);
+      fs.mkdirSync(path.dirname(outPath), { recursive: true });
+      fs.writeFileSync(outPath, html);
+      console.log(`\n✅ Graph written to ${outPath}`);
+      console.log(`   Open in browser to view interactive visualization.\n`);
+    }
+    console.log(`\n${formatGraphSummary(graph)}\n`);
+  });
+
+// Check-updates subcommand (for SKILL.md files)
+program
+  .command("check-updates <skill-md>")
+  .description("Check if a skill's source repo has been updated")
+  .action(async (skillMd: string) => {
+    const filePath = path.resolve(skillMd);
+    if (!fs.existsSync(filePath)) {
+      console.error(`❌ File not found: ${filePath}`);
+      process.exit(1);
+    }
+    const result = await checkSkillUpdates(filePath);
+    console.log(`\n${formatSkillUpdateCheck(result)}\n`);
+  });
+
+// Diff subcommand (between two SKILL.md files)
+program
+  .command("diff <old-skill-md> <new-skill-md>")
+  .description("Compare two SKILL.md files and show what changed")
+  .action((oldPath: string, newPath: string) => {
+    const absOld = path.resolve(oldPath);
+    const absNew = path.resolve(newPath);
+    if (!fs.existsSync(absOld)) {
+      console.error(`❌ File not found: ${absOld}`);
+      process.exit(1);
+    }
+    if (!fs.existsSync(absNew)) {
+      console.error(`❌ File not found: ${absNew}`);
+      process.exit(1);
+    }
+    const result = diffSkillFiles(absOld, absNew);
+    console.log(`\n${formatSkillDiff(result)}\n`);
+  });
+
+// Quality report subcommand
+program
+  .command("quality-report <skills-dir>")
+  .description("Generate HTML quality report for all skills in a directory")
+  .option("-o, --output <path>", "Output HTML file path")
+  .action((skillsDir: string, opts: any) => {
+    const absDir = path.resolve(skillsDir);
+    if (!fs.existsSync(absDir)) {
+      console.error(`❌ Directory not found: ${absDir}`);
+      process.exit(1);
+    }
+    const report = buildQualityReport(absDir);
+    if (report.totalSkills === 0) {
+      console.log(`\n📊 No skills found in ${absDir}\n`);
+      return;
+    }
+    if (opts.output) {
+      const html = generateQualityReportHtml(report);
+      const outPath = path.resolve(opts.output);
+      fs.mkdirSync(path.dirname(outPath), { recursive: true });
+      fs.writeFileSync(outPath, html);
+      console.log(`\n✅ Quality report written to ${outPath}`);
+    }
+    console.log(`\n${formatQualityReport(report)}\n`);
   });
 
 program.parse();

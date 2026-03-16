@@ -442,8 +442,8 @@ export { registryAdd, registryRemove, registryList, registryClear, loadRegistry,
 export type { RegistryEntry, Registry } from "./registry";
 export { getTemplate, listTemplates, isValidTemplate } from "./templates";
 export type { TemplateConfig, TemplateName } from "./templates";
-export { checkForUpdates, compareVersions, formatUpdateCheck, getCurrentVersion } from "./update-checker";
-export type { UpdateCheckResult } from "./update-checker";
+export { checkForUpdates, compareVersions, formatUpdateCheck, getCurrentVersion, checkSkillUpdates, formatSkillUpdateCheck } from "./update-checker";
+export type { UpdateCheckResult, SkillUpdateCheckResult } from "./update-checker";
 export { buildComparisonEntry, formatComparison } from "./compare";
 export type { SkillComparison, SkillComparisonEntry } from "./compare";
 export { generateChangelog, formatChangelog, categorizeCommit } from "./changelog";
@@ -474,3 +474,11 @@ export { parseSkillToData, toJson, toYaml, toHtml, convertFormat, formatExtensio
 export type { OutputFormat, SkillData } from "./formats";
 export { checkSkillHealth, checkSkillHealthContent, formatHealthResult } from "./health";
 export type { HealthCheck, HealthResult } from "./health";
+export { buildSkillGraph, generateGraphHtml, formatGraphSummary } from "./skill-graph";
+export type { SkillGraph, SkillNode, SkillEdge } from "./skill-graph";
+export { diffSkillFiles, diffSkillContent, formatSkillDiff } from "./skill-diff";
+export type { SkillDiffResult, SkillDiffChange } from "./skill-diff";
+export { buildQualityReport, generateQualityReportHtml, formatQualityReport } from "./quality-report";
+export type { QualityReport, QualityReportEntry } from "./quality-report";
+export { loadPlugin, createRepoData, runPlugins, injectPluginSections } from "./plugin";
+export type { RepoSkillPlugin, RepoData, SkillSection } from "./plugin";
