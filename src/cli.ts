@@ -52,6 +52,7 @@ program
   .option("-t, --template <name>", "Template: minimal, detailed, security, default", "default")
   .option("--no-github", "Skip GitHub API metadata fetching")
   .option("--min-quality <score>", "Skip skills below this quality score (0-100)", parseInt)
+  .option("--explain-score", "Show detailed quality score breakdown with weighted categories")
   .option("--package <path>", "Target a specific package in a monorepo (e.g. packages/core)")
   .option("--diff <skill-md>", "Compare with existing SKILL.md and show what changed")
   .option("--show-deps", "Show dependency report for a repo")
@@ -108,7 +109,7 @@ program
             template: answers.template,
             github: answers.includeGithub,
           });
-          printResult(result, opts.minQuality);
+          printResult(result, opts.minQuality, opts.explainScore);
         }
         return;
       }
@@ -157,7 +158,7 @@ program
           skillName: opts.name,
           template: opts.template,
         });
-        printResult(result, opts.minQuality);
+        printResult(result, opts.minQuality, opts.explainScore);
         if (opts.security && result.skillDir) {
           const secReport = generateSecurityReport(result.skillDir);
           console.log(formatSecurityReport(secReport));
@@ -206,7 +207,7 @@ program
           template: opts.template,
           github: opts.github,
         });
-        printResult(result, opts.minQuality);
+        printResult(result, opts.minQuality, opts.explainScore);
         if (opts.security && result.skillDir) {
           const secReport = generateSecurityReport(result.skillDir);
           console.log(formatSecurityReport(secReport));
@@ -262,7 +263,7 @@ function toYaml(obj: any, indent = 0): string {
   return lines.join("\n");
 }
 
-function printResult(result: { skillDir: string; referencesCount: number; quality?: any }, minQuality?: number) {
+function printResult(result: { skillDir: string; referencesCount: number; quality?: any }, minQuality?: number, explainScore = false) {
   console.log(`\n✅ Skill generated: ${result.skillDir}`);
   console.log(`   SKILL.md: ${path.join(result.skillDir, "SKILL.md")}`);
   if (result.referencesCount > 0) {
@@ -270,7 +271,7 @@ function printResult(result: { skillDir: string; referencesCount: number; qualit
   }
   if (result.quality) {
     console.log("");
-    console.log(formatQualityScore(result.quality));
+    console.log(formatQualityScore(result.quality, explainScore));
     if (minQuality && result.quality.score < minQuality) {
       console.log(`\n   ⚠️  Below minimum quality (${minQuality}/${result.quality.maxScore}). Removing...`);
       fs.rmSync(result.skillDir, { recursive: true, force: true });

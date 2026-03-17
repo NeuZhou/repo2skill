@@ -10,6 +10,8 @@ export interface SkillQualityDetail {
   score: number;
   maxScore: number;
   pass: boolean;
+  /** Weight category for explain-score breakdown */
+  category?: string;
 }
 
 export interface SkillQuality {
@@ -20,61 +22,159 @@ export interface SkillQuality {
   legacyScore: number;
 }
 
+/** Count code blocks (``` ... ```) in a string */
+function countCodeBlocks(text: string): number {
+  const matches = text.match(/```[\s\S]*?```/g);
+  return matches ? matches.length : 0;
+}
+
 export function scoreSkillQuality(analysis: RepoAnalysis): SkillQuality {
+  // --- Description quality (25%) ---
+  const desc = analysis.richDescription || analysis.description || "";
+  const descLen = desc.length;
+  let descScore = 0;
+  if (descLen > 0) {
+    descScore = 15; // base: has a description
+    if (descLen >= 20 && descLen <= 500) {
+      descScore = 25; // ideal length
+    } else if (descLen < 20) {
+      descScore = 10; // too short — penalized
+    } else {
+      descScore = 18; // >500 chars — penalized for being too long
+    }
+  }
+
+  // --- Examples (25% total: 20 for count + 5 for code quality) ---
+  const exampleCount = analysis.usageExamples.length;
+  let examplesScore: number;
+  if (exampleCount >= 3) {
+    examplesScore = 20;
+  } else if (exampleCount >= 1) {
+    examplesScore = 12;
+  } else if (analysis.usageSection) {
+    examplesScore = 5;
+  } else {
+    examplesScore = 0;
+  }
+
+  // Example code quality: do usage examples contain actual code blocks?
+  let codeQualityScore = 0;
+  if (exampleCount > 0) {
+    const blocksInExamples = analysis.usageExamples.reduce(
+      (sum, ex) => sum + countCodeBlocks(ex), 0,
+    );
+    codeQualityScore = blocksInExamples >= exampleCount ? 5 : blocksInExamples > 0 ? 3 : 0;
+  }
+
+  // --- API docs (20% total: 15 for reference + 5 for coverage) ---
+  let apiRefScore: number;
+  if (analysis.apiSection && analysis.keyApi.length > 0) {
+    apiRefScore = 15;
+  } else if (analysis.apiSection) {
+    apiRefScore = 10;
+  } else if (analysis.keyApi.length > 0) {
+    apiRefScore = 8;
+  } else {
+    apiRefScore = 0;
+  }
+
+  // API coverage: how many key APIs are documented?
+  let apiCoverageScore = 0;
+  if (analysis.keyApi.length >= 5) {
+    apiCoverageScore = 5;
+  } else if (analysis.keyApi.length >= 2) {
+    apiCoverageScore = 3;
+  } else if (analysis.keyApi.length >= 1) {
+    apiCoverageScore = 1;
+  }
+
+  // --- Triggers / when-to-use (15% total: 10 + 5) ---
+  const whenToUseScore = analysis.whenToUse.length > 0 ? 10 : 0;
+  const whenNotToUseScore = analysis.whenNotToUse.length > 0 ? 5 : 0;
+
+  // --- References / extras (15% total: 5 features + 5 tests + 5 install) ---
+  let featuresScore: number;
+  if (analysis.features.length >= 3) {
+    featuresScore = 5;
+  } else if (analysis.features.length >= 1) {
+    featuresScore = 3;
+  } else {
+    featuresScore = 0;
+  }
+
+  const testsScore = analysis.hasTests ? 5 : 0;
+  const installScore = analysis.installInstructions ? 5 : 0;
+
   const details: SkillQualityDetail[] = [
     {
-      label: "Has description",
-      score: (analysis.richDescription || analysis.description) ? 10 : 0,
-      maxScore: 10,
-      pass: !!(analysis.richDescription || analysis.description),
-    },
-    {
-      label: "Has install command",
-      score: analysis.installInstructions ? 10 : 0,
-      maxScore: 10,
-      pass: !!analysis.installInstructions,
+      label: "Description quality",
+      score: descScore,
+      maxScore: 25,
+      pass: descLen > 0,
+      category: "Description (25%)",
     },
     {
       label: "Has examples",
-      score: analysis.usageExamples.length >= 3 ? 15 : analysis.usageExamples.length >= 1 ? 10 : analysis.usageSection ? 5 : 0,
-      maxScore: 15,
-      pass: analysis.usageExamples.length > 0 || !!analysis.usageSection,
+      score: examplesScore,
+      maxScore: 20,
+      pass: exampleCount > 0 || !!analysis.usageSection,
+      category: "Examples (25%)",
     },
     {
-      label: "Has features list",
-      score: analysis.features.length >= 3 ? 10 : analysis.features.length >= 1 ? 5 : 0,
-      maxScore: 10,
-      pass: analysis.features.length > 0,
+      label: "Example code quality",
+      score: codeQualityScore,
+      maxScore: 5,
+      pass: codeQualityScore > 0,
+      category: "Examples (25%)",
     },
     {
       label: "Has API reference",
-      score: analysis.apiSection ? (analysis.keyApi.length > 0 ? 15 : 10) : analysis.keyApi.length > 0 ? 8 : 0,
+      score: apiRefScore,
       maxScore: 15,
       pass: !!(analysis.apiSection || analysis.keyApi.length > 0),
+      category: "API docs (20%)",
+    },
+    {
+      label: "API coverage",
+      score: apiCoverageScore,
+      maxScore: 5,
+      pass: analysis.keyApi.length > 0,
+      category: "API docs (20%)",
     },
     {
       label: 'Has "When to Use"',
-      score: analysis.whenToUse.length > 0 ? 10 : 0,
+      score: whenToUseScore,
       maxScore: 10,
       pass: analysis.whenToUse.length > 0,
+      category: "Triggers (15%)",
     },
     {
       label: 'Has "When NOT to Use"',
-      score: analysis.whenNotToUse.length > 0 ? 10 : 0,
-      maxScore: 10,
+      score: whenNotToUseScore,
+      maxScore: 5,
       pass: analysis.whenNotToUse.length > 0,
+      category: "Triggers (15%)",
     },
     {
-      label: "Has category",
-      score: 10, // always detected
-      maxScore: 10,
-      pass: true,
+      label: "Has features list",
+      score: featuresScore,
+      maxScore: 5,
+      pass: analysis.features.length > 0,
+      category: "References (15%)",
     },
     {
       label: "Has test examples",
-      score: analysis.hasTests ? 10 : 0,
-      maxScore: 10,
+      score: testsScore,
+      maxScore: 5,
       pass: analysis.hasTests,
+      category: "References (15%)",
+    },
+    {
+      label: "Has install command",
+      score: installScore,
+      maxScore: 5,
+      pass: !!analysis.installInstructions,
+      category: "References (15%)",
     },
   ];
 
@@ -85,14 +185,41 @@ export function scoreSkillQuality(analysis: RepoAnalysis): SkillQuality {
   return { score, maxScore, details, legacyScore };
 }
 
-export function formatQualityScore(quality: SkillQuality): string {
+export function formatQualityScore(quality: SkillQuality, explainScore = false): string {
   const lines: string[] = [];
   lines.push(`📊 Skill Quality Score: ${quality.score}/${quality.maxScore}`);
-  for (const d of quality.details) {
-    const icon = d.pass ? "✓" : "✗";
-    const label = d.pass ? d.label : `Missing ${d.label.replace(/^Has /, "").toLowerCase()}`;
-    lines.push(`  ${icon} ${label} (${d.score}/${d.maxScore})`);
+
+  if (explainScore) {
+    // Group details by category and show weighted breakdown
+    const categories = new Map<string, { earned: number; max: number; items: SkillQualityDetail[] }>();
+    for (const d of quality.details) {
+      const cat = d.category || "Other";
+      if (!categories.has(cat)) {
+        categories.set(cat, { earned: 0, max: 0, items: [] });
+      }
+      const group = categories.get(cat)!;
+      group.earned += d.score;
+      group.max += d.maxScore;
+      group.items.push(d);
+    }
+
+    for (const [cat, group] of categories) {
+      lines.push(`\n  ── ${cat}: ${group.earned}/${group.max} ──`);
+      for (const d of group.items) {
+        const icon = d.pass ? "✓" : "✗";
+        const label = d.pass ? d.label : `Missing ${d.label.replace(/^Has /, "").replace(/^Description /, "description ").replace(/^Example /, "example ").replace(/^API /, "API ").toLowerCase()}`;
+        lines.push(`    ${icon} ${label} (${d.score}/${d.maxScore})`);
+      }
+    }
+    lines.push(`\n  Legacy score: ${quality.legacyScore}/5`);
+  } else {
+    for (const d of quality.details) {
+      const icon = d.pass ? "✓" : "✗";
+      const label = d.pass ? d.label : `Missing ${d.label.replace(/^Has /, "").toLowerCase()}`;
+      lines.push(`  ${icon} ${label} (${d.score}/${d.maxScore})`);
+    }
   }
+
   return lines.join("\n");
 }
 

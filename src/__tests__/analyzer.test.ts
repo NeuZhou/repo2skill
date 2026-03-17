@@ -212,25 +212,24 @@ describe("categorizeProject", () => {
 });
 
 // ============================================================
-// scoreSkillQuality — NEW 100-point scale
+// scoreSkillQuality — weighted 100-point scale
 // ============================================================
 describe("scoreSkillQuality", () => {
   it("returns 0/100 for empty analysis", () => {
     const q = scoreSkillQuality(makeAnalysis());
-    // Only "Has category" is always 10
-    expect(q.score).toBe(10);
+    expect(q.score).toBe(0);
     expect(q.maxScore).toBe(100);
   });
 
   it("gives full score for complete analysis", () => {
     const q = scoreSkillQuality(makeAnalysis({
-      description: "A great tool",
-      richDescription: "A great tool for doing things",
+      description: "A great tool for doing things",
+      richDescription: "A great tool for doing things with lots of features",
       installInstructions: "npm install great-tool",
       usageExamples: ["```js\nimport x\n```", "```js\nfoo()\n```", "```js\nbar()\n```"],
       features: ["Fast", "Reliable", "Easy"],
       apiSection: "## API\nsome docs",
-      keyApi: ["createApp", "run"],
+      keyApi: ["createApp", "run", "stop", "configure", "extend"],
       whenToUse: ["Build apps"],
       whenNotToUse: ["Legacy systems"],
       hasTests: true,
@@ -242,16 +241,16 @@ describe("scoreSkillQuality", () => {
   it("partial score for usage examples", () => {
     const q1 = scoreSkillQuality(makeAnalysis({ usageExamples: ["```\ncode\n```"] }));
     const q3 = scoreSkillQuality(makeAnalysis({ usageExamples: ["```a```", "```b```", "```c```"] }));
-    // 1 example = 10, 3+ = 15
-    expect(q1.details.find(d => d.label === "Has examples")!.score).toBe(10);
-    expect(q3.details.find(d => d.label === "Has examples")!.score).toBe(15);
+    // 1 example = 12, 3+ = 20
+    expect(q1.details.find(d => d.label === "Has examples")!.score).toBe(12);
+    expect(q3.details.find(d => d.label === "Has examples")!.score).toBe(20);
   });
 
   it("partial score for features", () => {
     const q1 = scoreSkillQuality(makeAnalysis({ features: ["One"] }));
     const q3 = scoreSkillQuality(makeAnalysis({ features: ["A", "B", "C"] }));
-    expect(q1.details.find(d => d.label === "Has features list")!.score).toBe(5);
-    expect(q3.details.find(d => d.label === "Has features list")!.score).toBe(10);
+    expect(q1.details.find(d => d.label === "Has features list")!.score).toBe(3);
+    expect(q3.details.find(d => d.label === "Has features list")!.score).toBe(5);
   });
 
   it("API score from keyApi alone", () => {
@@ -269,16 +268,57 @@ describe("scoreSkillQuality", () => {
     expect(q.details.find(d => d.label === "Has API reference")!.score).toBe(15);
   });
 
-  it("legacyScore maps to 1-5 range", () => {
+  it("legacyScore maps to 0-5 range", () => {
     const qLow = scoreSkillQuality(makeAnalysis());
     const qHigh = scoreSkillQuality(makeAnalysis({
-      description: "x", richDescription: "x", installInstructions: "x",
-      usageExamples: ["a", "b", "c"], features: ["a", "b", "c"],
-      apiSection: "x", keyApi: ["x"], whenToUse: ["x"], whenNotToUse: ["x"], hasTests: true,
+      description: "A complete and well-documented tool",
+      richDescription: "A complete and well-documented tool for everything",
+      installInstructions: "npm install x",
+      usageExamples: ["```js\na()\n```", "```js\nb()\n```", "```js\nc()\n```"],
+      features: ["a", "b", "c"],
+      apiSection: "x", keyApi: ["a", "b", "c", "d", "e"],
+      whenToUse: ["x"], whenNotToUse: ["x"], hasTests: true,
     }));
     expect(qLow.legacyScore).toBeGreaterThanOrEqual(0);
     expect(qLow.legacyScore).toBeLessThanOrEqual(5);
     expect(qHigh.legacyScore).toBe(5);
+  });
+
+  it("penalizes descriptions that are too short", () => {
+    const q = scoreSkillQuality(makeAnalysis({ description: "Hi" }));
+    const detail = q.details.find(d => d.label === "Description quality")!;
+    expect(detail.score).toBe(10);
+    expect(detail.pass).toBe(true);
+  });
+
+  it("penalizes descriptions that are too long", () => {
+    const longDesc = "x".repeat(600);
+    const q = scoreSkillQuality(makeAnalysis({ description: longDesc }));
+    const detail = q.details.find(d => d.label === "Description quality")!;
+    expect(detail.score).toBe(18);
+    expect(detail.pass).toBe(true);
+  });
+
+  it("gives full description score for ideal length", () => {
+    const q = scoreSkillQuality(makeAnalysis({ description: "A well-written description of the project" }));
+    const detail = q.details.find(d => d.label === "Description quality")!;
+    expect(detail.score).toBe(25);
+  });
+
+  it("checks example code quality via code blocks", () => {
+    const qWithBlocks = scoreSkillQuality(makeAnalysis({ usageExamples: ["```js\nfoo()\n```"] }));
+    const qWithoutBlocks = scoreSkillQuality(makeAnalysis({ usageExamples: ["just plain text example"] }));
+    expect(qWithBlocks.details.find(d => d.label === "Example code quality")!.score).toBe(5);
+    expect(qWithoutBlocks.details.find(d => d.label === "Example code quality")!.score).toBe(0);
+  });
+
+  it("scores API coverage based on number of key APIs", () => {
+    const q1 = scoreSkillQuality(makeAnalysis({ keyApi: ["one"] }));
+    const q3 = scoreSkillQuality(makeAnalysis({ keyApi: ["a", "b", "c"] }));
+    const q5 = scoreSkillQuality(makeAnalysis({ keyApi: ["a", "b", "c", "d", "e"] }));
+    expect(q1.details.find(d => d.label === "API coverage")!.score).toBe(1);
+    expect(q3.details.find(d => d.label === "API coverage")!.score).toBe(3);
+    expect(q5.details.find(d => d.label === "API coverage")!.score).toBe(5);
   });
 });
 
@@ -289,7 +329,7 @@ describe("formatQualityScore", () => {
   it("formats passing items with checkmark", () => {
     const q = scoreSkillQuality(makeAnalysis({ description: "hello" }));
     const output = formatQualityScore(q);
-    expect(output).toContain("✓ Has description");
+    expect(output).toContain("✓ Description quality");
     expect(output).toContain("📊 Skill Quality Score:");
   });
 
@@ -303,6 +343,17 @@ describe("formatQualityScore", () => {
     const q = scoreSkillQuality(makeAnalysis({ description: "x", hasTests: true }));
     const output = formatQualityScore(q);
     expect(output).toMatch(/\d+\/100/);
+  });
+
+  it("shows weighted breakdown with explainScore", () => {
+    const q = scoreSkillQuality(makeAnalysis({
+      description: "A decent project description here",
+      whenToUse: ["building apps"],
+    }));
+    const output = formatQualityScore(q, true);
+    expect(output).toContain("Description (25%)");
+    expect(output).toContain("Triggers (15%)");
+    expect(output).toContain("Legacy score:");
   });
 });
 
