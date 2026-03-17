@@ -170,3 +170,16 @@ MIT © [Kang Zhou](https://github.com/NeuZhou)
 <p align="center">
   Made with 🦀 by <a href="https://github.com/NeuZhou">Kang Zhou</a>
 </p>
+
+## 🔗 NeuZhou Ecosystem
+
+repo2skill is part of the NeuZhou open source toolkit for AI agents:
+
+| Project | What it does | Link |
+|---------|-------------|------|
+| **repo2skill** | Convert any repo into an AI agent skill | *You are here* |
+| **ClawGuard** | Security scanner for AI agents | [GitHub](https://github.com/NeuZhou/clawguard) |
+| **AgentProbe** | Behavioral testing framework for agents | [GitHub](https://github.com/NeuZhou/agentprobe) |
+| **FinClaw** | AI-powered financial intelligence engine | [GitHub](https://github.com/NeuZhou/finclaw) |
+
+**The workflow:** Generate skills with repo2skill → Scan for vulnerabilities with ClawGuard → Test behavior with AgentProbe → See it in action with FinClaw.
