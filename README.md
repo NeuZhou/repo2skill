@@ -91,6 +91,15 @@ repo2skill quality-report ./skills/ -o report.html
 # Quality: 85/100 — description ✅, examples ✅, features ✅, API docs ⚠️
 ```
 
+### 🔒 Security Scanning
+```bash
+repo2skill facebook/react --security
+# 🔒 Security Report — Risk Level: 🟢 LOW, 0 findings
+
+repo2skill security ./my-project
+# Standalone scan without generating a skill
+```
+
 ### 📁 Monorepo Support
 ```bash
 repo2skill monorepo ./my-monorepo
@@ -153,7 +162,7 @@ repo2skill graph ./skills/ -o graph.html
 repo2skill template --type cli --name my-tool
 ```
 
-Full reference: see `repo2skill --help`
+Full reference: see `repo2skill --help` and [`docs/API.md`](docs/API.md)
 
 ---
 

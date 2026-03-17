@@ -24,6 +24,7 @@ import { mergeSkills } from "./merge";
 import { convertFormat, formatExtension } from "./formats";
 import { checkSkillHealth, formatHealthResult } from "./health";
 import { extractVersionHistory, formatVersionHistory } from "./versioning";
+import { generateSecurityReport, formatSecurityReport } from "./security-report";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
@@ -58,6 +59,7 @@ program
   .option("--check-updates", "Check for newer version of repo2skill")
   .option("--ai", "Use LLM to enhance generated skill descriptions (requires OPENAI_API_KEY)")
   .option("-i, --interactive", "Interactive guided mode")
+  .option("--security", "Generate a security report alongside the skill")
   .action(async (repo: string | undefined, opts: any) => {
     try {
       if (opts.verbose) {
@@ -156,6 +158,10 @@ program
           template: opts.template,
         });
         printResult(result, opts.minQuality);
+        if (opts.security && result.skillDir) {
+          const secReport = generateSecurityReport(result.skillDir);
+          console.log(formatSecurityReport(secReport));
+        }
         if (opts.publish && result.skillDir) await publishSkill(result.skillDir);
         return;
       }
@@ -201,6 +207,10 @@ program
           github: opts.github,
         });
         printResult(result, opts.minQuality);
+        if (opts.security && result.skillDir) {
+          const secReport = generateSecurityReport(result.skillDir);
+          console.log(formatSecurityReport(secReport));
+        }
         if (opts.publish && result.skillDir) await publishSkill(result.skillDir);
       } else {
         console.error("❌ Provide a repo argument or use --batch <file> or --local <path>");
@@ -859,6 +869,21 @@ program
       console.log(`\n✅ Quality report written to ${outPath}`);
     }
     console.log(`\n${formatQualityReport(report)}\n`);
+  });
+
+// Security report subcommand
+program
+  .command("security <path>")
+  .description("Run a standalone security scan on a directory or skill")
+  .action((targetPath: string) => {
+    const absPath = path.resolve(targetPath);
+    if (!fs.existsSync(absPath)) {
+      console.error(`❌ Path not found: ${absPath}`);
+      process.exit(1);
+    }
+    const report = generateSecurityReport(absPath);
+    console.log(formatSecurityReport(report));
+    if (report.riskLevel === "critical") process.exit(1);
   });
 
 program.parse();

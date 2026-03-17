@@ -482,3 +482,5 @@ export { buildQualityReport, generateQualityReportHtml, formatQualityReport } fr
 export type { QualityReport, QualityReportEntry } from "./quality-report";
 export { loadPlugin, createRepoData, runPlugins, injectPluginSections } from "./plugin";
 export type { RepoSkillPlugin, RepoData, SkillSection } from "./plugin";
+export { generateSecurityReport, formatSecurityReport } from "./security-report";
+export type { SecurityReport, SecurityFinding } from "./security-report";
