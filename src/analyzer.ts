@@ -765,6 +765,48 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
     if (analysis.language === "unknown") analysis.language = "Scala";
   }
 
+  // DESCRIPTION (R)
+  const rDescPath = path.join(repoDir, "DESCRIPTION");
+  if (fs.existsSync(rDescPath)) {
+    const content = fs.readFileSync(rDescPath, "utf-8");
+    // Only treat as R package if it has a "Package:" field (to avoid false positives)
+    const pkgMatch = content.match(/^Package:\s*(.+)$/m);
+    if (pkgMatch) {
+      const rPkgName = pkgMatch[1].trim();
+      if (!analysis.packageName) analysis.packageName = rPkgName;
+
+      const descMatch = content.match(/^Description:\s*(.+(?:\n\s+.+)*)$/m);
+      if (descMatch) {
+        const desc = descMatch[1].replace(/\n\s+/g, " ").trim();
+        analysis.description = analysis.description || desc;
+      }
+
+      const versionMatch = content.match(/^Version:\s*(.+)$/m);
+      if (versionMatch) analysis.entryPoints.push(`${rPkgName}@${versionMatch[1].trim()}`);
+
+      const licenseMatch = content.match(/^License:\s*(.+)$/m);
+      if (licenseMatch && !analysis.license) analysis.license = licenseMatch[1].trim();
+
+      // Extract dependencies from Imports field (may be multi-line)
+      const importsMatch = content.match(/^Imports:\s*([\s\S]*?)(?=^[A-Z][a-zA-Z]*:|$)/m);
+      if (importsMatch) {
+        const imports = importsMatch[1].replace(/\([^)]+\)/g, "").split(",").map(d => d.trim()).filter(Boolean);
+        for (const dep of imports) {
+          if (dep && !analysis.dependencies.includes(dep)) {
+            analysis.dependencies.push(dep);
+          }
+        }
+      }
+
+      if (!analysis.installInstructions) {
+        analysis.installInstructions = `\`\`\`r\ninstall.packages("${rPkgName}")\n\`\`\``;
+      }
+
+      if (!analysis.languages.includes("R")) analysis.languages.unshift("R");
+      if (analysis.language === "unknown") analysis.language = "R";
+    }
+  }
+
   // Key API extraction
   try {
     analysis.keyApi = extractKeyApi(repoDir, analysis, allFiles);
