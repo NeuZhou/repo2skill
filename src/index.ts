@@ -46,7 +46,7 @@ async function cloneRepo(url: string, tmpDir: string): Promise<void> {
   }
 }
 
-function parseRepoArg(repo: string): { url: string; name: string } {
+export function parseRepoArg(repo: string): { url: string; name: string } {
   if (repo.startsWith("http")) {
     const name = repo.replace(/\.git$/, "").split("/").pop()!;
     return { url: repo, name };
