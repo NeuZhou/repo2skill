@@ -421,6 +421,54 @@ export async function analyzeRepo(repoDir: string, repoName: string): Promise<Re
     if (analysis.language === "unknown") analysis.language = lang;
   }
 
+  // *.csproj (C#)
+  const csprojFiles = allFiles.filter(f => f.endsWith(".csproj"));
+  if (csprojFiles.length > 0) {
+    const csprojPath = path.join(repoDir, csprojFiles[0]);
+    try {
+      const content = fs.readFileSync(csprojPath, "utf-8");
+      // Extract properties
+      const descMatch = content.match(/<Description>([^<]+)<\/Description>/i);
+      const pkgIdMatch = content.match(/<PackageId>([^<]+)<\/PackageId>/i);
+      const assemblyMatch = content.match(/<AssemblyName>([^<]+)<\/AssemblyName>/i);
+      const versionMatch = content.match(/<Version>([^<]+)<\/Version>/i);
+      const outputTypeMatch = content.match(/<OutputType>([^<]+)<\/OutputType>/i);
+
+      if (descMatch) analysis.description = analysis.description || descMatch[1];
+      const csprojName = pkgIdMatch?.[1] || assemblyMatch?.[1] || path.basename(csprojFiles[0], ".csproj");
+      if (!analysis.packageName) analysis.packageName = csprojName;
+
+      // Extract PackageReference dependencies
+      const depRegex = /<PackageReference\s+Include="([^"]+)"/gi;
+      let dm;
+      while ((dm = depRegex.exec(content)) !== null) {
+        if (!analysis.dependencies.includes(dm[1])) {
+          analysis.dependencies.push(dm[1]);
+        }
+      }
+
+      // Detect CLI (OutputType=Exe)
+      if (outputTypeMatch && outputTypeMatch[1].toLowerCase() === "exe") {
+        const exeName = assemblyMatch?.[1] || csprojName;
+        if (!analysis.cliCommands.some(c => c.name === exeName)) {
+          analysis.cliCommands.push({ name: exeName });
+        }
+      }
+
+      // Install instructions
+      if (!analysis.installInstructions) {
+        analysis.installInstructions = `\`\`\`bash\ndotnet add package ${csprojName}\n\`\`\``;
+      }
+
+      // License from csproj
+      const licenseMatch = content.match(/<PackageLicenseExpression>([^<]+)<\/PackageLicenseExpression>/i);
+      if (licenseMatch && !analysis.license) analysis.license = licenseMatch[1];
+    } catch {}
+
+    if (!analysis.languages.includes("C#")) analysis.languages.unshift("C#");
+    if (analysis.language === "unknown") analysis.language = "C#";
+  }
+
   // go.mod (Go)
   const goModPath = path.join(repoDir, "go.mod");
   if (fs.existsSync(goModPath)) {
