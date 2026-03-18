@@ -12,7 +12,7 @@
     "dev": "ts-node src/cli.ts",
     "test": "vitest run"
   },
-  "author": "Kang Zhou",
+  "author": "NeuZhou",
   "license": "MIT",
   "repository": {
     "type": "git",

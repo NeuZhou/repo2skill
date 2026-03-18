@@ -172,12 +172,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-MIT © [Kang Zhou](https://github.com/NeuZhou)
+MIT © [NeuZhou](https://github.com/NeuZhou)
 
 ---
 
 <p align="center">
-  Made with 🦀 by <a href="https://github.com/NeuZhou">Kang Zhou</a>
+  Made with 🦀 by <a href="https://github.com/NeuZhou">NeuZhou</a>
 </p>
 
 ## 🔗 NeuZhou Ecosystem

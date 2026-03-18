@@ -276,7 +276,7 @@ openclaw hooks enable clawguard-policy   # Enforces tool call policies
 
 ## 📜 License
 
-**AGPL-3.0** © [Kang Zhou](https://github.com/NeuZhou)
+**AGPL-3.0** © [NeuZhou](https://github.com/NeuZhou)
 
 ClawGuard is dual-licensed:
 
@@ -285,7 +285,7 @@ ClawGuard is dual-licensed:
 
 Contributors must agree to our [CLA](CLA.md) to enable dual licensing.
 
-For commercial inquiries: neuzhou@outlook.com
+For commercial inquiries: neuzhou@users.noreply.github.com
 
 ---
 
