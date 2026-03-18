@@ -51,7 +51,8 @@ export function parseRepoArg(repo: string): { url: string; name: string } {
     const name = repo.replace(/\.git$/, "").split("/").pop()!;
     return { url: repo, name };
   }
-  if (repo.includes("/")) {
+  // Only accept exactly "owner/repo" format (no deeper paths)
+  if (/^[^/]+\/[^/]+$/.test(repo)) {
     const name = repo.split("/").pop()!;
     return { url: `https://github.com/${repo}`, name };
   }

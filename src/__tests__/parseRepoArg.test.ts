@@ -49,4 +49,8 @@ describe("parseRepoArg", () => {
     expect(result.url).toBe("https://github.com/user/repo.js");
     expect(result.name).toBe("repo.js");
   });
+
+  it("rejects triple-slash paths (not valid GitHub shorthand)", () => {
+    expect(() => parseRepoArg("org/sub/repo")).toThrow(/Invalid repo/);
+  });
 });
